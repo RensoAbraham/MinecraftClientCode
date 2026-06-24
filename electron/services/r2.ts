@@ -135,9 +135,25 @@ export async function clearBucket(
   const keys: string[] = []
   let token: string | undefined
   do {
-    const url = `${base}/${c.bucket}?list-type=2${token ? `&continuation-token=${encodeURIComponent(token)}` : ''}`
+    const url = `${base}/${c.bucket}/?list-type=2${token ? `&continuation-token=${encodeURIComponent(token)}` : ''}`
     const res = await client.fetch(url)
-    if (!res.ok) throw new Error(`No se pudo listar el bucket: HTTP ${res.status} ${await res.text()}`)
+    if (!res.ok) {
+      const body = await res.text()
+      if (res.status === 404 || /NoSuchKey|NoSuchBucket/i.test(body)) {
+        throw new Error(
+          'No se pudo listar el bucket. Revisa que el Endpoint sea el de la API S3 ' +
+            '(https://<id>.r2.cloudflarestorage.com, NO la URL pública r2.dev) y que el nombre del ' +
+            'bucket sea correcto. Si persiste, usa el panel de Cloudflare para borrar los objetos.',
+        )
+      }
+      if (res.status === 403) {
+        throw new Error(
+          'Acceso denegado al listar. El token de R2 necesita permiso de lectura/listado ' +
+            '(usa un token "Admin Read & Write" o con permiso de listar objetos).',
+        )
+      }
+      throw new Error(`No se pudo listar el bucket: HTTP ${res.status} ${body}`)
+    }
     const xml = await res.text()
     for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) {
       keys.push(m[1].replace(/&amp;/g, '&'))

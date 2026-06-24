@@ -3,7 +3,7 @@
   "productName": "Paput Client",
   "version": "1.0.0",
   "description": "Paput Client — modpack manager privado para Minecraft (premium) con sincronización automática",
-  "author": "Renso",
+  "author": "Renso Abraham",
   "license": "UNLICENSED",
   "private": true,
   "main": "dist-electron/main.js",
@@ -20,6 +20,7 @@
   "build": {
     "appId": "one.unicornio.paputclient",
     "productName": "Paput Client",
+    "copyright": "Copyright © 2026 Renso Abraham",
     "directories": {
       "output": "release",
       "buildResources": "build"

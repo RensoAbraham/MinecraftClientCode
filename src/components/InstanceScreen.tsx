@@ -1,26 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Instance } from '../../shared/ipc'
 import { useProgress } from '../hooks/useProgress'
-import { SubscriptionMenu } from './SubscriptionMenu'
-
-/** Se muestra el "gag" de PaputClient Premium una sola vez (la primera vez que pulsas JUGAR). */
-const PREMIUM_GAG_KEY = 'paput.premiumGagSeen'
 
 interface InstanceScreenProps {
   instance: Instance
   onRemoveGroup?: (groupId: string) => void
+  /** ¿Ya se vio el gag Premium? Si no, el primer JUGAR lo dispara en vez de jugar. */
+  premiumSeen: boolean
+  /** Se llama en el primer JUGAR (muestra el gag y activa la corona en la barra). */
+  onFirstPlay: () => void
 }
 
 /**
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, onRemoveGroup }: InstanceScreenProps) {
+export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPlay }: InstanceScreenProps) {
   const progress = useProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bgFailed, setBgFailed] = useState(false)
-  const [gag, setGag] = useState(false)
   const [paused, setPaused] = useState(false)
   const [volume, setVolume] = useState(0.4)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -46,10 +45,9 @@ export function InstanceScreen({ instance, onRemoveGroup }: InstanceScreenProps)
 
   async function handlePlay() {
     if (busy) return
-    // La primera vez (y solo una), troleamos con el panel Premium (plan Pro).
-    if (!localStorage.getItem(PREMIUM_GAG_KEY)) {
-      localStorage.setItem(PREMIUM_GAG_KEY, '1')
-      setGag(true)
+    // La primera vez (y solo una), troleamos con el panel Premium en vez de jugar.
+    if (!premiumSeen) {
+      onFirstPlay()
       return
     }
     setBusy(true)
@@ -270,9 +268,6 @@ export function InstanceScreen({ instance, onRemoveGroup }: InstanceScreenProps)
           </div>
         </div>
       </div>
-
-      {/* Gag de PaputClient Premium (solo la primera vez al pulsar JUGAR) */}
-      {gag && <SubscriptionMenu triggerTier="Pro" onClose={() => setGag(false)} />}
     </main>
   )
 }

@@ -37,6 +37,15 @@ export default function App() {
   const [adding, setAdding] = useState(false)
   // Vista previa del login (solo dev): para revisar esa pantalla aun con sesión.
   const [previewLogin, setPreviewLogin] = useState(false)
+  // El "gag" Premium: la corona está oculta hasta que aparece la primera vez al
+  // pulsar JUGAR. Después queda visible en la barra lateral para reabrirlo.
+  const [premiumSeen, setPremiumSeen] = useState(() => !!localStorage.getItem('paput.premiumGagSeen'))
+
+  function triggerPremiumGag() {
+    localStorage.setItem('paput.premiumGagSeen', '1')
+    setPremiumSeen(true)
+    setShowSubs(true)
+  }
 
   useEffect(() => {
     async function bootstrap() {
@@ -104,7 +113,7 @@ export default function App() {
         onOpenSettings={() => setShowSettings(true)}
         onOpenAccounts={() => setShowAccounts(true)}
         onOpenSkin={() => setShowSkin(true)}
-        onOpenSubs={() => setShowSubs(true)}
+        onOpenSubs={premiumSeen ? () => setShowSubs(true) : undefined}
         onOpenDev={backToSelect}
         onPreviewLogin={isDev ? () => setPreviewLogin(true) : undefined}
       />
@@ -116,7 +125,12 @@ export default function App() {
           onSelectInstance={setSelectedInstanceId}
         />
       ) : (
-        <InstanceScreen instance={activeInstance} onRemoveGroup={handleRemoveGroup} />
+        <InstanceScreen
+          instance={activeInstance}
+          onRemoveGroup={handleRemoveGroup}
+          premiumSeen={premiumSeen}
+          onFirstPlay={triggerPremiumGag}
+        />
       )}
 
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}

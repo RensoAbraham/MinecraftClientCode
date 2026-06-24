@@ -11,8 +11,8 @@ interface SidebarProps {
   onOpenSettings: () => void
   onOpenAccounts: () => void
   onOpenSkin: () => void
-  /** Abre el menú de suscripciones (broma). */
-  onOpenSubs: () => void
+  /** Abre el menú de suscripciones (broma). Si no se pasa, la corona no aparece. */
+  onOpenSubs?: () => void
   /** Si se pasa (modo dev), muestra el botón del Panel Dev. */
   onOpenDev?: () => void
   /** Si se pasa (modo dev), muestra el botón de vista previa del login. */
@@ -85,14 +85,19 @@ export function Sidebar({
         </button>
       )}
 
-      {/* Suscripción (broma) */}
-      <button
-        onClick={onOpenSubs}
-        className="mt-auto grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
-        title="PaputClient Premium"
-      >
-        <CrownIcon />
-      </button>
+      {/* Empuja el grupo inferior de botones hacia abajo */}
+      <div className="mt-auto" />
+
+      {/* Suscripción (broma): aparece solo tras verse la primera vez al jugar */}
+      {onOpenSubs && (
+        <button
+          onClick={onOpenSubs}
+          className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
+          title="PaputClient Premium"
+        >
+          <CrownIcon />
+        </button>
+      )}
 
       {onPreviewLogin && (
         <button
