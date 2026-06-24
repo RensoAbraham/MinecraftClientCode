@@ -30,3 +30,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Client ID de Azure (público) — añádelo en Settings > Secrets and variables > Actions
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+      - name: Poner notas de la release (desde CHANGELOG.md)
+        if: success()
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v v="$VERSION" '$0 ~ "^## " v "([ ]|$)" {g=1; next} /^## /{g=0} g' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then NOTES="Versión $VERSION"; fi
+          gh release edit "$GITHUB_REF_NAME" --notes "$NOTES"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
