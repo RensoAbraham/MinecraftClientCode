@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.4
+- **Notas de versión automáticas**: cada actualización muestra sus cambios sola.
+- Primera actualización **silenciosa** (sin asistente) de la app.
+- Mejoras internas de mantenimiento.
+
 ## 1.0.3
 - **Actualizaciones silenciosas**: a partir de esta versión, las próximas se instalan solas, sin asistente.
 - **Gestor de R2**: nuevo panel para ver el contenido de la nube por grupo y borrar de forma selectiva (un grupo o todo), con confirmación.
