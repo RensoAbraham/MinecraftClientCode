@@ -199,8 +199,11 @@ export function Settings({ onClose }: SettingsProps) {
             {/* --- Acerca de --- */}
             <div className="mt-6 border-t border-tenso-border pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-tenso-muted">
-                  Paput Client <span className="text-tenso-text">v{__APP_VERSION__}</span>
+                <span className="flex items-center gap-2 text-xs text-tenso-muted">
+                  Paput Client
+                  <span className="rounded border border-sky-400/50 bg-sky-400/10 px-1.5 py-0.5 font-bold text-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.35)]">
+                    v{__APP_VERSION__}
+                  </span>
                 </span>
                 <div className="flex gap-2">
                   <button

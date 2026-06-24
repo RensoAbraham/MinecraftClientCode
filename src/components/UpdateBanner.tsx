@@ -9,7 +9,13 @@ import type { UpdateStatus } from '../../shared/ipc'
 export function UpdateBanner() {
   const [status, setStatus] = useState<UpdateStatus | null>(null)
 
-  useEffect(() => window.tenso.onUpdateStatus(setStatus), [])
+  useEffect(() => {
+    const off = window.tenso.onUpdateStatus(setStatus)
+    // Dispara la comprobación cuando la UI ya está suscrita, así el aviso sale
+    // solo al abrir (evita perder el evento por el timing del arranque).
+    window.tenso.updateCheck()
+    return off
+  }, [])
 
   // Solo mostramos algo cuando hay novedad relevante.
   if (!status || status.state === 'checking' || status.state === 'none' || status.state === 'error') {

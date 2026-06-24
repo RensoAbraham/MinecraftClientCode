@@ -38,7 +38,8 @@
       {
         "provider": "github",
         "owner": "RensoAbraham",
-        "repo": "MinecraftClientCode"
+        "repo": "MinecraftClientCode",
+        "releaseType": "release"
       }
     ],
     "electronLanguages": [
