@@ -72,7 +72,7 @@ export async function testConnection(): Promise<{ ok: boolean; message: string }
       service: 's3',
       region: 'auto',
     })
-    const base = c.endpoint.replace(/\/$/, '')
+    const base = s3Base(c)
     const key = `_paputclient_test.txt`
     const url = `${base}/${c.bucket}/${key}`
     const put = await client.fetch(url, {
@@ -107,62 +107,79 @@ const MIME: Record<string, string> = {
   '.ogg': 'video/ogg',
 }
 
+/**
+ * Devuelve el endpoint S3 base, quitando una barra final y el bucket si viene
+ * incluido (error común: Cloudflare muestra el "S3 API" como
+ * https://<id>.r2.cloudflarestorage.com/<bucket>, pero el cliente S3 necesita
+ * solo https://<id>.r2.cloudflarestorage.com).
+ */
+function s3Base(c: R2Config): string {
+  let base = c.endpoint.replace(/\/+$/, '')
+  const suffix = '/' + c.bucket.toLowerCase()
+  if (base.toLowerCase().endsWith(suffix)) {
+    base = base.slice(0, base.length - suffix.length)
+  }
+  return base
+}
+
 function contentType(name: string): string {
   const dot = name.lastIndexOf('.')
   const ext = dot >= 0 ? name.slice(dot).toLowerCase() : ''
   return MIME[ext] ?? 'application/octet-stream'
 }
 
-/**
- * Vacía por completo el bucket de R2 (borra TODOS los objetos). Útil para
- * empezar de cero y que no queden archivos viejos. Requiere permiso de listado.
- */
-export async function clearBucket(
-  onProgress?: (done: number, total: number, label: string) => void,
-): Promise<{ deleted: number }> {
-  const c = getConfig()
-  if (!c) throw new Error('R2 no está configurado.')
+type DeleteProgress = (done: number, total: number, label: string) => void
 
-  const client = new AwsClient({
+function makeClient(c: R2Config) {
+  return new AwsClient({
     accessKeyId: c.accessKeyId,
     secretAccessKey: c.secretAccessKey,
     service: 's3',
     region: 'auto',
   })
-  const base = c.endpoint.replace(/\/$/, '')
+}
 
-  // 1) Listar todos los objetos (paginado con continuation-token).
+/** Lista todas las claves del bucket (con un prefijo opcional), paginando. */
+async function listKeys(prefix = ''): Promise<string[]> {
+  const c = getConfig()
+  if (!c) throw new Error('R2 no está configurado.')
+  const client = makeClient(c)
+  const base = s3Base(c)
   const keys: string[] = []
   let token: string | undefined
   do {
-    const url = `${base}/${c.bucket}/?list-type=2${token ? `&continuation-token=${encodeURIComponent(token)}` : ''}`
-    const res = await client.fetch(url)
+    const q = `list-type=2${prefix ? `&prefix=${encodeURIComponent(prefix)}` : ''}${token ? `&continuation-token=${encodeURIComponent(token)}` : ''}`
+    const res = await client.fetch(`${base}/${c.bucket}/?${q}`)
     if (!res.ok) {
       const body = await res.text()
       if (res.status === 404 || /NoSuchKey|NoSuchBucket/i.test(body)) {
         throw new Error(
-          'No se pudo listar el bucket. Revisa que el Endpoint sea el de la API S3 ' +
-            '(https://<id>.r2.cloudflarestorage.com, NO la URL pública r2.dev) y que el nombre del ' +
-            'bucket sea correcto. Si persiste, usa el panel de Cloudflare para borrar los objetos.',
+          `No se pudo listar. Endpoint: "${c.endpoint}", bucket: "${c.bucket}". Debe ser el de la ` +
+            'API S3 (https://<id>.r2.cloudflarestorage.com), NO la URL pública (pub-….r2.dev).',
         )
       }
       if (res.status === 403) {
         throw new Error(
-          'Acceso denegado al listar. El token de R2 necesita permiso de lectura/listado ' +
-            '(usa un token "Admin Read & Write" o con permiso de listar objetos).',
+          'Acceso denegado / firma incorrecta al listar. Revisa el Access Key + Secret y que el ' +
+            'token sea "Admin Read & Write" (con permiso de listar).',
         )
       }
       throw new Error(`No se pudo listar el bucket: HTTP ${res.status} ${body}`)
     }
     const xml = await res.text()
-    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) {
-      keys.push(m[1].replace(/&amp;/g, '&'))
-    }
+    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) keys.push(m[1].replace(/&amp;/g, '&'))
     const next = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)
     token = next ? next[1] : undefined
   } while (token)
+  return keys
+}
 
-  // 2) Borrar uno a uno.
+/** Borra una lista de claves del bucket. Devuelve cuántas borró. */
+async function deleteKeys(keys: string[], onProgress?: DeleteProgress): Promise<number> {
+  const c = getConfig()
+  if (!c) throw new Error('R2 no está configurado.')
+  const client = makeClient(c)
+  const base = s3Base(c)
   let deleted = 0
   for (const key of keys) {
     onProgress?.(deleted, keys.length, key)
@@ -172,7 +189,31 @@ export async function clearBucket(
     if (r.ok || r.status === 204) deleted++
   }
   onProgress?.(deleted, keys.length, 'completado')
-  return { deleted }
+  return deleted
+}
+
+/** Resumen del bucket agrupado por el primer segmento (grupo). */
+export async function summarize(): Promise<{ groups: { prefix: string; count: number }[]; total: number }> {
+  const keys = await listKeys()
+  const map = new Map<string, number>()
+  for (const k of keys) {
+    const top = k.split('/')[0] || '(raíz)'
+    map.set(top, (map.get(top) ?? 0) + 1)
+  }
+  const groups = [...map.entries()].map(([prefix, count]) => ({ prefix, count })).sort((a, b) => a.prefix.localeCompare(b.prefix))
+  return { groups, total: keys.length }
+}
+
+/** Borra solo los objetos de un grupo (prefijo). */
+export async function deletePrefix(prefix: string, onProgress?: DeleteProgress): Promise<{ deleted: number }> {
+  const keys = await listKeys(prefix.endsWith('/') ? prefix : `${prefix}/`)
+  return { deleted: await deleteKeys(keys, onProgress) }
+}
+
+/** Vacía por completo el bucket (borra TODOS los objetos). */
+export async function clearBucket(onProgress?: DeleteProgress): Promise<{ deleted: number }> {
+  const keys = await listKeys()
+  return { deleted: await deleteKeys(keys, onProgress) }
 }
 
 function walk(dir: string, root: string, acc: string[] = []): string[] {
@@ -202,7 +243,7 @@ export async function uploadGroup(
     service: 's3',
     region: 'auto',
   })
-  const base = c.endpoint.replace(/\/$/, '')
+  const base = s3Base(c)
 
   async function put(key: string, body: Buffer) {
     const res = await client.fetch(`${base}/${c!.bucket}/${key}`, {

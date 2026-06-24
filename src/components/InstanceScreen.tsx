@@ -197,7 +197,7 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
             <h1 className="flex items-center gap-2 truncate text-lg font-bold">
               {instance.name}
               {instance.version && (
-                <span className="shrink-0 rounded border border-sky-400/50 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-bold text-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.35)]">
+                <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft shadow-[0_0_8px_rgba(166,77,252,0.35)]">
                   v{instance.version}
                 </span>
               )}

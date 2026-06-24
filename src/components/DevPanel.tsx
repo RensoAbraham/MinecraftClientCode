@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { DevGroup, DevInstance, InstancePatch, NewInstance, R2ConfigView } from '../../shared/ipc'
 import { R2Settings } from './R2Settings'
+import { R2Manager } from './R2Manager'
 
 interface DevPanelProps {
   onClose: () => void
@@ -32,6 +33,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
   const [addingFor, setAddingFor] = useState<string | null>(null)
   const [form, setForm] = useState<NewInstance>(EMPTY_FORM)
   const [showR2, setShowR2] = useState(false)
+  const [showR2Manager, setShowR2Manager] = useState(false)
   const [r2, setR2] = useState<R2ConfigView | null>(null)
   const [pubProgress, setPubProgress] = useState<{ label: string; fraction: number } | null>(null)
   const [r2Test, setR2Test] = useState<{ ok: boolean; message: string } | null>(null)
@@ -75,23 +77,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
       setR2Test(await window.tenso.r2Test())
     } finally {
       setTesting(false)
-    }
-  }
-
-  async function clearR2() {
-    if (!confirm('¿Vaciar R2? Esto borra TODOS los archivos del bucket (instancias publicadas incluidas). Tendrás que volver a Publicar.')) {
-      return
-    }
-    setTesting(true)
-    setPubProgress({ label: 'Vaciando R2…', fraction: -1 })
-    try {
-      const r = await window.tenso.r2Clear()
-      setR2Test({ ok: true, message: `R2 vaciado: ${r.deleted} archivos borrados.` })
-    } catch (e) {
-      setR2Test({ ok: false, message: e instanceof Error ? e.message : String(e) })
-    } finally {
-      setTesting(false)
-      setTimeout(() => setPubProgress(null), 1500)
     }
   }
 
@@ -366,12 +351,11 @@ export function DevPanel({ onClose }: DevPanelProps) {
                   {testing ? 'Probando…' : 'Probar conexión R2'}
                 </button>
                 <button
-                  onClick={clearR2}
-                  disabled={testing}
-                  className="rounded-lg border border-tenso-accent/40 bg-tenso-accent/10 px-3 py-1.5 text-xs font-medium text-tenso-accent-soft transition-colors hover:bg-tenso-accent/20 disabled:opacity-60"
-                  title="Borra TODOS los archivos del bucket de R2"
+                  onClick={() => setShowR2Manager(true)}
+                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
+                  title="Ver y borrar contenido de R2 (por grupo o todo)"
                 >
-                  Vaciar R2
+                  Gestionar R2
                 </button>
                 {r2Test && (
                   <span className={`text-xs ${r2Test.ok ? 'text-green-400' : 'text-tenso-accent-soft'}`}>
@@ -517,7 +501,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                               <div className="min-w-0">
                                 <p className="flex items-center gap-2 truncate font-medium">
                                   {inst.name}
-                                  <span className="shrink-0 rounded border border-sky-400/50 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-bold text-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.35)]">
+                                  <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft shadow-[0_0_8px_rgba(166,77,252,0.35)]">
                                     v{inst.version}
                                   </span>
                                 </p>
@@ -622,6 +606,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
           }}
         />
       )}
+      {showR2Manager && <R2Manager onClose={() => setShowR2Manager(false)} />}
     </div>
   )
 }

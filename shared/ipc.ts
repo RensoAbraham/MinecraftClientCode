@@ -260,6 +260,10 @@ export interface TensoApi {
   r2Test(): Promise<{ ok: boolean; message: string }>
   /** Vacía por completo el bucket de R2 (borra todos los objetos). */
   r2Clear(): Promise<{ deleted: number }>
+  /** Resumen del contenido de R2 agrupado por grupo (prefijo). */
+  r2Summary(): Promise<{ groups: { prefix: string; count: number }[]; total: number }>
+  /** Borra solo los objetos de un grupo (prefijo). */
+  r2DeletePrefix(prefix: string): Promise<{ deleted: number }>
   /** Crea un grupo nuevo. Devuelve su id. */
   devCreateGroup(name: string): Promise<string>
   /** Crea una instancia nueva en un grupo. Devuelve su id. */
@@ -332,6 +336,8 @@ export const IPC = {
   devPublishProgress: 'tenso:devPublishProgress', // canal de eventos (send)
   r2Test: 'tenso:r2Test',
   r2Clear: 'tenso:r2Clear',
+  r2Summary: 'tenso:r2Summary',
+  r2DeletePrefix: 'tenso:r2DeletePrefix',
   devCreateGroup: 'tenso:devCreateGroup',
   devCreateInstance: 'tenso:devCreateInstance',
   devUpdateInstance: 'tenso:devUpdateInstance',

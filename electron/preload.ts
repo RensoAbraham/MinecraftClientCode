@@ -54,6 +54,8 @@ const api: TensoApi = {
   },
   r2Test: () => ipcRenderer.invoke(IPC.r2Test),
   r2Clear: () => ipcRenderer.invoke(IPC.r2Clear),
+  r2Summary: () => ipcRenderer.invoke(IPC.r2Summary),
+  r2DeletePrefix: (prefix) => ipcRenderer.invoke(IPC.r2DeletePrefix, prefix),
   devCreateGroup: (name) => ipcRenderer.invoke(IPC.devCreateGroup, name),
   devCreateInstance: (groupId, meta) => ipcRenderer.invoke(IPC.devCreateInstance, groupId, meta),
   devUpdateInstance: (groupId, instanceId, patch) =>

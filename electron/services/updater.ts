@@ -42,8 +42,10 @@ export async function downloadUpdate(): Promise<void> {
   await autoUpdater.downloadUpdate().catch(() => {})
 }
 
-/** Reinicia e instala la actualización ya descargada. */
+/** Reinicia e instala la actualización ya descargada, EN SILENCIO (sin asistente). */
 export function quitAndInstall(): void {
   if (!app.isPackaged) return
-  autoUpdater.quitAndInstall()
+  // isSilent = true  -> instala sin mostrar el asistente (usa la carpeta ya elegida).
+  // isForceRunAfter = true -> vuelve a abrir la app al terminar.
+  autoUpdater.quitAndInstall(true, true)
 }

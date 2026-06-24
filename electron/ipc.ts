@@ -89,6 +89,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
       }),
     ),
   )
+  ipcMain.handle(IPC.r2Summary, () => r2.summarize())
+  ipcMain.handle(IPC.r2DeletePrefix, (_e, prefix: string) =>
+    r2.deletePrefix(prefix, (done, total, label) =>
+      getWindow()?.webContents.send(IPC.devPublishProgress, {
+        label: `Borrando ${prefix} (${done}/${total}): ${label}`,
+        fraction: total ? done / total : -1,
+      }),
+    ),
+  )
   ipcMain.handle(IPC.devCreateGroup, (_e, name: string) => dev.createGroup(name))
   ipcMain.handle(IPC.devCreateInstance, (_e, groupId: string, meta) =>
     dev.createInstance(groupId, meta),
