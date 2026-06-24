@@ -1,0 +1,32 @@
+name: Release
+
+# Se dispara al subir un tag de versión, p. ej. v1.0.1
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write # necesario para crear la Release y subir los archivos
+    steps:
+      - name: Clonar repo
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias
+        run: npm install --legacy-peer-deps
+
+      - name: Compilar y publicar la Release
+        run: npm run release
+        env:
+          # Token automático de GitHub para crear la Release y subir el .exe + latest.yml
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Client ID de Azure (público) — añádelo en Settings > Secrets and variables > Actions
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}

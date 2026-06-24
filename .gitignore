@@ -1,0 +1,38 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+dist-electron/
+release/
+
+# Variables de entorno locales (el Client ID es público, pero mantenemos
+# .env fuera del control de versiones por convención; usar .env.example).
+.env
+.env.*.local
+
+# Claves/credenciales cifradas (R2, cuentas) — viven en userData, nunca en el repo
+*.dat
+
+# Contenido de modpacks del dev (mods, configs, videos grandes)
+modpack/
+
+# Notas internas (Azure, restricción de menú) — no son parte del código
+docs/
+
+# README de prueba dentro de public/
+public/README.md
+
+# Recursos sueltos del dev en la raíz (imágenes, gifs, capturas) — no van al repo.
+# Los iconos necesarios para el build viven en build/ (no se ignoran).
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+/*.mp4
+
+# Logs y temporales
+*.log
+.DS_Store
+Thumbs.db
