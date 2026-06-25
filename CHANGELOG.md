@@ -1,5 +1,15 @@
 # Cambios de Paput Client
 
+## 1.0.5
+- **Elegir tipo de instancia** (LOW/HIGH): al abrir un grupo eliges según tu PC; se recuerda y puedes cambiarlo en Ajustes.
+- **Cartillas de conexión** PLAYIT / ZEROTIER: eliges cómo conectar, sin ver IPs.
+- **Reparar instancia** (menú ⋯): reinstala mods y configs si el juego no abre.
+- **Personalizar** la imagen y el fondo de tu instancia (se guarda en tu equipo; puedes volver a la de base).
+- **Guía rápida** que te señala dónde está cada cosa (sale la primera vez y desde Ajustes).
+- Las acciones de la instancia se agrupan en un **menú "⋯"** más limpio.
+- **Publicar más rápido**: ahora solo se sube a la nube lo que cambió (subida incremental).
+- El **sello de versión** de cada instancia avanza solo en cada publicación.
+
 ## 1.0.4
 - **Notas de versión automáticas**: cada actualización muestra sus cambios sola.
 - Primera actualización **silenciosa** (sin asistente) de la app.

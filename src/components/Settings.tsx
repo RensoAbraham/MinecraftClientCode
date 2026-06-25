@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 
 interface SettingsProps {
   onClose: () => void
+  /** Olvida el tipo de instancia elegido (LOW/HIGH); la próxima vez vuelve a preguntar. */
+  onResetVariants: () => void
+  /** Vuelve a abrir la guía rápida. */
+  onShowGuide: () => void
 }
 
 /** Modal de ajustes: Java, memoria RAM y auto-join. */
-export function Settings({ onClose }: SettingsProps) {
+export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProps) {
   const [maxRamMb, setMaxRamMb] = useState(4096)
   const [systemRamMb, setSystemRamMb] = useState(8192)
   const [autoJoin, setAutoJoin] = useState(false)
@@ -188,6 +192,44 @@ export function Settings({ onClose }: SettingsProps) {
                 </span>
               </span>
             </label>
+
+            {/* --- Tipo de instancia (LOW/HIGH) --- */}
+            <div className="mt-5 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <span className="text-sm">
+                <span className="font-medium">Tipo de instancia</span>
+                <span className="mt-0.5 block text-xs text-tenso-muted">
+                  Vuelve a elegir LOW/HIGH la próxima vez que abras un grupo con varios tipos.
+                </span>
+              </span>
+              <button
+                onClick={() => {
+                  onResetVariants()
+                  onClose()
+                }}
+                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
+              >
+                Volver a elegir
+              </button>
+            </div>
+
+            {/* --- Guía rápida --- */}
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <span className="text-sm">
+                <span className="font-medium">Guía rápida</span>
+                <span className="mt-0.5 block text-xs text-tenso-muted">
+                  Repasa lo básico de PaputClient cuando quieras.
+                </span>
+              </span>
+              <button
+                onClick={() => {
+                  onClose()
+                  onShowGuide()
+                }}
+                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
+              >
+                Ver guía
+              </button>
+            </div>
 
             <button
               onClick={handleSave}

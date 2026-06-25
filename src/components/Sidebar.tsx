@@ -1,11 +1,13 @@
-import type { Account, Instance } from '../../shared/ipc'
+import type { Account } from '../../shared/ipc'
+import type { Group } from '../App'
 
 interface SidebarProps {
-  instances: Instance[]
-  selectedInstanceId: string | null
+  groups: Group[]
+  selectedGroupId: string | null
+  variants: Record<string, string>
   account: Account | null
   onHome: () => void
-  onSelectInstance: (instanceId: string) => void
+  onSelectGroup: (groupId: string) => void
   /** Si se pasa, muestra el botón de añadir más grupos. */
   onAdd?: () => void
   onOpenSettings: () => void
@@ -15,20 +17,21 @@ interface SidebarProps {
   onOpenSubs?: () => void
   /** Si se pasa (modo dev), muestra el botón del Panel Dev. */
   onOpenDev?: () => void
-  /** Si se pasa (modo dev), muestra el botón de vista previa del login. */
+  /** Si se pasa (modo dev), muestra el botón del menú de vistas previas. */
   onPreviewLogin?: () => void
 }
 
 /**
- * Barra lateral: inicio, un icono por INSTANCIA (cada versión LOW/HIGH por
- * separado), botón de añadir, ajustes y avatar.
+ * Barra lateral: inicio, un icono por GRUPO (con el arte de la variante elegida),
+ * botón de añadir, ajustes y avatar.
  */
 export function Sidebar({
-  instances,
-  selectedInstanceId,
+  groups,
+  selectedGroupId,
+  variants,
   account,
   onHome,
-  onSelectInstance,
+  onSelectGroup,
   onAdd,
   onOpenSettings,
   onOpenAccounts,
@@ -42,7 +45,7 @@ export function Sidebar({
       <button
         onClick={onHome}
         className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-white shadow-lg transition-transform hover:scale-105 active:scale-95 ${
-          selectedInstanceId === null ? 'bg-tenso-accent ring-2 ring-tenso-accent-soft' : 'bg-tenso-accent'
+          selectedGroupId === null ? 'bg-tenso-accent ring-2 ring-tenso-accent-soft' : 'bg-tenso-accent'
         }`}
         title="Inicio"
       >
@@ -51,23 +54,25 @@ export function Sidebar({
 
       <div className="my-1 h-px w-10 shrink-0 bg-tenso-border" />
 
-      {/* Un icono por instancia (cada versión por separado) */}
-      {instances.map((inst) => {
-        const active = inst.id === selectedInstanceId
+      {/* Un icono por grupo (con el arte de la variante elegida o la primera) */}
+      {groups.map((g, idx) => {
+        const shown = g.instances.find((i) => i.id === variants[g.groupId]) ?? g.instances[0]
+        const active = g.groupId === selectedGroupId
         return (
           <button
-            key={inst.id}
-            onClick={() => onSelectInstance(inst.id)}
-            title={inst.name}
+            key={g.groupId}
+            data-tour={idx === 0 ? 'groups' : undefined}
+            onClick={() => onSelectGroup(g.groupId)}
+            title={g.group}
             className={`grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border bg-tenso-panel-2 transition-transform hover:scale-105 active:scale-95 ${
               active ? 'border-tenso-accent ring-2 ring-tenso-accent' : 'border-tenso-border'
             }`}
           >
-            {inst.imageUrl ? (
-              <img src={inst.imageUrl} alt={inst.name} className="h-full w-full object-cover" />
+            {shown?.imageUrl ? (
+              <img src={shown.imageUrl} alt={g.group} className="h-full w-full object-cover" />
             ) : (
               <span className="text-lg font-bold text-tenso-text">
-                {inst.name.charAt(0).toUpperCase()}
+                {g.group.charAt(0).toUpperCase()}
               </span>
             )}
           </button>
@@ -103,7 +108,7 @@ export function Sidebar({
         <button
           onClick={onPreviewLogin}
           className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
-          title="Vista previa del login (dev)"
+          title="Vistas previas (dev)"
         >
           <EyeIcon />
         </button>
@@ -120,6 +125,7 @@ export function Sidebar({
       )}
 
       <button
+        data-tour="settings"
         onClick={onOpenSettings}
         className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-all hover:rotate-45 hover:bg-tenso-panel-2 hover:text-tenso-text"
         title="Ajustes"
@@ -129,6 +135,7 @@ export function Sidebar({
 
       {/* Editar skin (icono de ropa) */}
       <button
+        data-tour="skin"
         onClick={onOpenSkin}
         className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
         title="Editar skin"
@@ -138,6 +145,7 @@ export function Sidebar({
 
       {/* Avatar (clic = cambiar de cuenta) */}
       <button
+        data-tour="account"
         onClick={onOpenAccounts}
         className="mt-1 grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-tenso-accent bg-tenso-panel-2 transition-transform hover:scale-105 active:scale-95"
         title={account ? `${account.name} — cambiar cuenta` : 'Cuentas'}

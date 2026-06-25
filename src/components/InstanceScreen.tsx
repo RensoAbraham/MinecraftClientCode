@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Instance } from '../../shared/ipc'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ConnectionKind, Instance } from '../../shared/ipc'
 import { useProgress } from '../hooks/useProgress'
 
 interface InstanceScreenProps {
   instance: Instance
+  /** Conexión elegida (PLAYIT/ZEROTIER) con la que lanzar el juego. */
+  connection?: ConnectionKind
   onRemoveGroup?: (groupId: string) => void
+  /** Si el grupo tiene varios tipos, permite volver a elegir. */
+  onChangeVariant?: () => void
+  /** Si la instancia ofrece varias conexiones, permite volver a elegir. */
+  onChangeConnection?: () => void
+  /** Se llama cuando la jugadora personaliza (o restaura) la imagen/fondo. */
+  onCustomized?: (updated: Instance) => void
   /** ¿Ya se vio el gag Premium? Si no, el primer JUGAR lo dispara en vez de jugar. */
   premiumSeen: boolean
   /** Se llama en el primer JUGAR (muestra el gag y activa la corona en la barra). */
@@ -15,7 +23,7 @@ interface InstanceScreenProps {
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPlay }: InstanceScreenProps) {
+export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVariant, onChangeConnection, onCustomized, premiumSeen, onFirstPlay }: InstanceScreenProps) {
   const progress = useProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +31,18 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
   const [paused, setPaused] = useState(false)
   const [volume, setVolume] = useState(0.4)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [confirmRepair, setConfirmRepair] = useState(false)
+  const [repairing, setRepairing] = useState(false)
+  const [repaired, setRepaired] = useState(false)
+  const [showCustomize, setShowCustomize] = useState(false)
+  const [customizing, setCustomizing] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Si cambia el fondo (p. ej. tras personalizarlo), reintenta mostrarlo.
+  useEffect(() => {
+    setBgFailed(false)
+  }, [instance.backgroundUrl])
 
   // Aplica el volumen (mudo si es 0) al fondo en vídeo.
   useEffect(() => {
@@ -53,7 +72,7 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
     setBusy(true)
     setError(null)
     try {
-      await window.tenso.play(instance.id)
+      await window.tenso.play(instance.id, connection)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -65,6 +84,33 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
     await window.tenso.cancelPlay().catch(() => {})
     setBusy(false)
     setError(null)
+  }
+
+  async function handleCustomize(action: () => Promise<Instance | null>) {
+    setCustomizing(true)
+    try {
+      const updated = await action()
+      if (updated) onCustomized?.(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCustomizing(false)
+    }
+  }
+
+  async function handleRepair() {
+    setConfirmRepair(false)
+    setRepairing(true)
+    setRepaired(false)
+    try {
+      await window.tenso.repairInstance()
+      setRepaired(true)
+      setTimeout(() => setRepaired(false), 4000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRepairing(false)
+    }
   }
 
   // Hay algo que cancelar si está preparando/descargando o el juego está abierto.
@@ -142,17 +188,175 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
         </div>
       </div>
 
-      {/* Quitar grupo (todas sus instancias) */}
-      {onRemoveGroup && (
+      {/* Menú de acciones (⋯) arriba a la derecha: personalizar, reparar, quitar grupo */}
+      <div className="absolute top-4 right-4 z-20">
         <button
-          onClick={() => setConfirmRemove(true)}
-          title={`Quitar el grupo "${instance.group}"`}
-          className="absolute top-4 right-4 z-10 grid h-9 w-9 place-items-center rounded-lg bg-tenso-panel/70 text-tenso-muted backdrop-blur transition-colors hover:bg-tenso-panel hover:text-tenso-accent-soft"
+          data-tour="instance-menu"
+          onClick={() => setMenuOpen((o) => !o)}
+          title="Acciones de la instancia"
+          className={`grid h-9 w-9 place-items-center rounded-lg backdrop-blur transition-colors ${
+            menuOpen
+              ? 'bg-tenso-panel text-tenso-text'
+              : 'bg-tenso-panel/70 text-tenso-muted hover:bg-tenso-panel hover:text-tenso-text'
+          }`}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6" />
-          </svg>
+          {repairing ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="anim-spin" aria-hidden>
+              <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+            </svg>
+          ) : (
+            <DotsIcon />
+          )}
         </button>
+
+        {menuOpen && (
+          <>
+            {/* Capa para cerrar al hacer clic fuera */}
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="anim-fade-in absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-tenso-border bg-tenso-panel shadow-2xl">
+              <MenuItem
+                onClick={() => { setMenuOpen(false); setShowCustomize(true) }}
+                icon={<ImageIcon />}
+                label="Personalizar"
+              />
+              <MenuItem
+                onClick={() => { setMenuOpen(false); setConfirmRepair(true) }}
+                icon={<WrenchIcon />}
+                label="Reparar instancia"
+                disabled={repairing || busy}
+              />
+              {onRemoveGroup && (
+                <MenuItem
+                  onClick={() => { setMenuOpen(false); setConfirmRemove(true) }}
+                  icon={<TrashIcon />}
+                  label="Quitar grupo"
+                  danger
+                />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Aviso de reparación completada */}
+      {repaired && (
+        <div className="anim-fade-in absolute top-16 right-4 z-10 max-w-xs rounded-lg border border-green-500/40 bg-tenso-panel/90 px-3 py-2 text-xs text-green-300 backdrop-blur">
+          Instancia reparada. Pulsa JUGAR para volver a descargar los archivos.
+        </div>
+      )}
+
+      {/* Personalizar imagen y fondo (de base vienen los del grupo) */}
+      {showCustomize && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => !customizing && setShowCustomize(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <span className="text-tenso-accent-soft"><ImageIcon /></span>
+              Personalizar
+            </h2>
+            <p className="mt-2 text-sm text-tenso-muted">
+              Cambia la imagen y el fondo a tu gusto. Se guardan solo en tu equipo; la base sigue
+              siendo la del grupo y puedes restaurarla cuando quieras.
+            </p>
+
+            <div className="mt-4 flex items-center gap-3 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-tenso-panel">
+                {instance.imageUrl ? (
+                  <img src={instance.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full place-items-center text-xl font-black text-tenso-muted">
+                    {instance.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <span className="text-xs font-semibold text-tenso-muted">Imagen de instancia</span>
+                <div className="flex gap-2">
+                  <button
+                    disabled={customizing}
+                    onClick={() => handleCustomize(() => window.tenso.customizeInstanceImage(instance.id))}
+                    className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                  >
+                    Cambiar
+                  </button>
+                  <button
+                    disabled={customizing}
+                    onClick={() => handleCustomize(() => window.tenso.resetInstanceCustomization(instance.id, 'image'))}
+                    className="rounded-lg border border-tenso-border px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+                  >
+                    De base
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <span className="text-xs font-semibold text-tenso-muted">Fondo (imagen, GIF o vídeo)</span>
+              <div className="mt-1.5 flex gap-2">
+                <button
+                  disabled={customizing}
+                  onClick={() => handleCustomize(() => window.tenso.customizeInstanceBackground(instance.id))}
+                  className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                >
+                  Cambiar fondo
+                </button>
+                <button
+                  disabled={customizing}
+                  onClick={() => handleCustomize(() => window.tenso.resetInstanceCustomization(instance.id, 'background'))}
+                  className="rounded-lg border border-tenso-border px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+                >
+                  De base
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={() => setShowCustomize(false)}
+                disabled={customizing}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+              >
+                {customizing ? 'Aplicando…' : 'Cerrar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación de reparar instancia */}
+      {confirmRepair && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setConfirmRepair(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <span className="text-tenso-accent-soft"><WrenchIcon /></span>
+              Reparar instancia
+            </h2>
+            <p className="mt-2 text-sm text-tenso-muted">
+              Reinstala las dependencias, configs y mods, y verifica si hay archivos corruptos. Esto
+              puede solucionar problemas si tu juego no se inicia debido a errores relacionados con el
+              launcher. Tu Java y los recursos descargados se conservan, así que será rápido.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmRepair(false)}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRepair}
+                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
+              >
+                Reparar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmación de quitar grupo */}
@@ -202,8 +406,29 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
                 </span>
               )}
             </h1>
-            <p className="mt-0.5 text-xs text-tenso-muted">
-              {instance.loader.toUpperCase()} {instance.mcVersion}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-tenso-muted">
+              <span>{instance.loader.toUpperCase()} {instance.mcVersion}</span>
+              {connection && (
+                <span className="rounded bg-tenso-panel-2 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-tenso-accent-soft">
+                  {connection.toUpperCase()}
+                </span>
+              )}
+              {onChangeVariant && (
+                <button
+                  onClick={onChangeVariant}
+                  className="rounded text-tenso-accent-soft underline-offset-2 hover:underline"
+                >
+                  Cambiar tipo
+                </button>
+              )}
+              {onChangeConnection && (
+                <button
+                  onClick={onChangeConnection}
+                  className="rounded text-tenso-accent-soft underline-offset-2 hover:underline"
+                >
+                  Cambiar conexión
+                </button>
+              )}
             </p>
 
             {/* Barra de progreso / estado (vacío cuando está listo) */}
@@ -232,6 +457,7 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
 
             <div className="mt-3 flex gap-2">
               <button
+                data-tour="play"
                 onClick={handlePlay}
                 disabled={busy}
                 className="flex-1 rounded-xl bg-tenso-accent py-2.5 font-bold tracking-wide text-white shadow-lg transition-all hover:bg-tenso-accent-soft hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
@@ -269,6 +495,71 @@ export function InstanceScreen({ instance, onRemoveGroup, premiumSeen, onFirstPl
         </div>
       </div>
     </main>
+  )
+}
+
+function MenuItem({
+  onClick,
+  icon,
+  label,
+  disabled,
+  danger,
+}: {
+  onClick: () => void
+  icon: ReactNode
+  label: string
+  disabled?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        danger
+          ? 'text-tenso-muted hover:bg-tenso-accent/10 hover:text-tenso-accent-soft'
+          : 'text-tenso-text hover:bg-tenso-panel-2'
+      }`}
+    >
+      <span className="shrink-0 text-tenso-muted">{icon}</span>
+      {label}
+    </button>
+  )
+}
+
+function DotsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6" />
+    </svg>
+  )
+}
+
+function ImageIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-4.5-4.5L5 21" />
+    </svg>
+  )
+}
+
+function WrenchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L3 18v3h3l6.5-6.5a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6Z" />
+    </svg>
   )
 }
 

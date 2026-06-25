@@ -1,4 +1,5 @@
 import { app, safeStorage } from 'electron'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { AwsClient } from 'aws4fetch'
@@ -174,6 +175,40 @@ async function listKeys(prefix = ''): Promise<string[]> {
   return keys
 }
 
+/**
+ * Lista los objetos de un prefijo con su ETag (para subida incremental).
+ * Para objetos subidos con un PUT simple (como hace `uploadGroup`), el ETag de
+ * R2 es el MD5 en hex del contenido, así que sirve para detectar cambios.
+ */
+async function listObjectsWithEtag(prefix = ''): Promise<Map<string, string>> {
+  const c = getConfig()
+  if (!c) throw new Error('R2 no está configurado.')
+  const client = makeClient(c)
+  const base = s3Base(c)
+  const out = new Map<string, string>()
+  let token: string | undefined
+  do {
+    const q = `list-type=2${prefix ? `&prefix=${encodeURIComponent(prefix)}` : ''}${token ? `&continuation-token=${encodeURIComponent(token)}` : ''}`
+    const res = await client.fetch(`${base}/${c.bucket}/?${q}`)
+    if (!res.ok) return out // si falla el listado, simplemente subimos todo
+    const xml = await res.text()
+    for (const block of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const seg = block[1]
+      const key = seg.match(/<Key>([^<]+)<\/Key>/)?.[1]
+      const etag = seg.match(/<ETag>([^<]+)<\/ETag>/)?.[1]
+      if (key && etag) {
+        out.set(
+          key.replace(/&amp;/g, '&'),
+          etag.replace(/&quot;/g, '').replace(/"/g, '').toLowerCase(),
+        )
+      }
+    }
+    const next = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)
+    token = next ? next[1] : undefined
+  } while (token)
+  return out
+}
+
 /** Borra una lista de claves del bucket. Devuelve cuántas borró. */
 async function deleteKeys(keys: string[], onProgress?: DeleteProgress): Promise<number> {
   const c = getConfig()
@@ -274,11 +309,26 @@ export async function uploadGroup(
     }
   }
 
+  // Subida INCREMENTAL: lo que ya está en R2 con el mismo contenido se omite
+  // (compara el MD5 local con el ETag remoto). Así re-publicar solo sube lo nuevo.
+  const remote = await listObjectsWithEtag(`${groupId}/`)
+
   let done = 0
+  let uploaded = 0
+  let skipped = 0
   for (const t of tasks) {
+    const body = fs.readFileSync(t.file)
+    const localMd5 = crypto.createHash('md5').update(body).digest('hex')
+    if (remote.get(t.key) === localMd5) {
+      skipped++
+      done++
+      onProgress?.(done, tasks.length, `(sin cambios) ${t.key}`)
+      continue
+    }
     onProgress?.(done, tasks.length, t.key)
-    await put(t.key, fs.readFileSync(t.file))
+    await put(t.key, body)
+    uploaded++
     done++
   }
-  onProgress?.(done, tasks.length, 'completado')
+  onProgress?.(done, tasks.length, `completado · ${uploaded} subidos, ${skipped} sin cambios`)
 }

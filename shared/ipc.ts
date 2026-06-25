@@ -10,6 +10,9 @@ export type LaunchStage =
   | 'running' // el juego está abierto
   | 'error'
 
+/** Método de conexión al servidor que elige el jugador. */
+export type ConnectionKind = 'playit' | 'zerotier'
+
 /** Progreso reportado por el motor de sincronización / descargas. */
 export interface Progress {
   stage: LaunchStage
@@ -30,7 +33,9 @@ export interface Instance {
   mcVersion: string // p. ej. "1.21.1"
   loader: 'neoforge' | 'forge' | 'fabric' | 'quilt' | 'vanilla'
   loaderVersion: string
-  serverAddress: string // ip:puerto para quickPlay
+  serverAddress: string // dirección PLAYIT (ip:puerto) para quickPlay
+  /** Dirección alternativa por ZeroTier (ip:puerto). Si existe, se ofrece como cartilla. */
+  zerotierAddress?: string
   /** Versión del contenido de la instancia (la pone el dev, p. ej. "0.0.6"). */
   version?: string
   imageUrl?: string
@@ -79,6 +84,8 @@ export interface DevInstance {
   loader: string
   loaderVersion: string
   serverAddress: string
+  /** Dirección por ZeroTier (ip:puerto), opcional. */
+  zerotierAddress: string
   description: string
   /** Versión del contenido de la instancia (diferenciador, p. ej. "0.0.6"). */
   version: string
@@ -97,6 +104,7 @@ export interface InstancePatch {
   loader?: Instance['loader']
   loaderVersion?: string
   serverAddress?: string
+  zerotierAddress?: string
   description?: string
   version?: string
 }
@@ -130,6 +138,8 @@ export interface NewInstance {
   loader: Instance['loader']
   loaderVersion: string
   serverAddress: string
+  /** Dirección por ZeroTier (ip:puerto), opcional. */
+  zerotierAddress?: string
   /** Descripción / requisitos recomendados (opcional). */
   description?: string
   /** Versión del contenido (diferenciador, p. ej. "0.0.1"). */
@@ -185,6 +195,19 @@ export interface TensoApi {
   getInstances(): Promise<Instance[]>
   /** Elimina un grupo desbloqueado (y todas sus instancias). */
   removeGroup(groupId: string): Promise<void>
+  /**
+   * Deja que la jugadora elija su propia imagen de instancia (se guarda en su
+   * equipo y reemplaza a la del dev). Devuelve la instancia ya actualizada, o
+   * null si canceló.
+   */
+  customizeInstanceImage(instanceId: string): Promise<Instance | null>
+  /** Igual que la anterior pero para el fondo (imagen/GIF/vídeo). */
+  customizeInstanceBackground(instanceId: string): Promise<Instance | null>
+  /**
+   * Restaura la imagen/fondo "de base" (la del dev), borrando la personalización
+   * local. `what`: 'image' | 'background' | 'all'. Devuelve la instancia actualizada.
+   */
+  resetInstanceCustomization(instanceId: string, what: 'image' | 'background' | 'all'): Promise<Instance | null>
   /** Inicia sesión con Microsoft (abre el flujo OAuth). */
   login(): Promise<Account | null>
   /**
@@ -218,10 +241,18 @@ export interface TensoApi {
   applyCape(id: string): Promise<void>
   /** Oculta la capa de la cuenta. */
   hideCape(): Promise<void>
-  /** Sincroniza + lanza el juego (de la instancia indicada) conectando al servidor. */
-  play(instanceId: string): Promise<void>
+  /**
+   * Sincroniza + lanza el juego (de la instancia indicada) conectando al
+   * servidor. `connection` elige qué dirección usar (PLAYIT o ZeroTier).
+   */
+  play(instanceId: string, connection?: ConnectionKind): Promise<void>
   /** Cancela la preparación/lanzamiento en curso y cierra el juego si está abierto. */
   cancelPlay(): Promise<void>
+  /**
+   * Repara la instalación: borra mods/configs/librerías/versiones para forzar
+   * una descarga limpia en el siguiente JUGAR (conserva Java y los assets).
+   */
+  repairInstance(): Promise<void>
   /** Suscribe a eventos de progreso. Devuelve la función para desuscribir. */
   onProgress(cb: (p: Progress) => void): () => void
   /** Devuelve los ajustes actuales junto a la RAM total del sistema (MB). */
@@ -302,6 +333,9 @@ export const IPC = {
   redeemCode: 'tenso:redeemCode',
   getInstances: 'tenso:getInstances',
   removeGroup: 'tenso:removeGroup',
+  customizeInstanceImage: 'tenso:customizeInstanceImage',
+  customizeInstanceBackground: 'tenso:customizeInstanceBackground',
+  resetInstanceCustomization: 'tenso:resetInstanceCustomization',
   login: 'tenso:login',
   loginOffline: 'tenso:loginOffline',
   getAccount: 'tenso:getAccount',
@@ -319,6 +353,7 @@ export const IPC = {
   hideCape: 'tenso:hideCape',
   play: 'tenso:play',
   cancelPlay: 'tenso:cancelPlay',
+  repairInstance: 'tenso:repairInstance',
   getSettings: 'tenso:getSettings',
   setSettings: 'tenso:setSettings',
   openExternal: 'tenso:openExternal',

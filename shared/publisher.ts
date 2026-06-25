@@ -113,6 +113,7 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
       loader: meta.loader,
       loaderVersion: meta.loaderVersion,
       serverAddress: meta.serverAddress,
+      zerotierAddress: meta.zerotierAddress ?? '',
       version: meta.version ?? '0.0.1',
       description: meta.description,
       imageUrl: iconFile ? `${fileBase}/icon.png` : meta.imageUrl,

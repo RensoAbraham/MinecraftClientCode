@@ -7,6 +7,11 @@ const api: TensoApi = {
   redeemCode: (code) => ipcRenderer.invoke(IPC.redeemCode, code),
   getInstances: () => ipcRenderer.invoke(IPC.getInstances),
   removeGroup: (groupId) => ipcRenderer.invoke(IPC.removeGroup, groupId),
+  customizeInstanceImage: (instanceId) => ipcRenderer.invoke(IPC.customizeInstanceImage, instanceId),
+  customizeInstanceBackground: (instanceId) =>
+    ipcRenderer.invoke(IPC.customizeInstanceBackground, instanceId),
+  resetInstanceCustomization: (instanceId, what) =>
+    ipcRenderer.invoke(IPC.resetInstanceCustomization, instanceId, what),
   login: () => ipcRenderer.invoke(IPC.login),
   loginOffline: (username) => ipcRenderer.invoke(IPC.loginOffline, username),
   getAccount: () => ipcRenderer.invoke(IPC.getAccount),
@@ -22,8 +27,9 @@ const api: TensoApi = {
   getCapes: () => ipcRenderer.invoke(IPC.getCapes),
   applyCape: (id) => ipcRenderer.invoke(IPC.applyCape, id),
   hideCape: () => ipcRenderer.invoke(IPC.hideCape),
-  play: (instanceId) => ipcRenderer.invoke(IPC.play, instanceId),
+  play: (instanceId, connection) => ipcRenderer.invoke(IPC.play, instanceId, connection),
   cancelPlay: () => ipcRenderer.invoke(IPC.cancelPlay),
+  repairInstance: () => ipcRenderer.invoke(IPC.repairInstance),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),

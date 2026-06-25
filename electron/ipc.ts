@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain, shell } from 'electron'
 import { IPC, type Progress } from '../shared/ipc'
 import * as instances from './services/instances'
 import * as auth from './services/auth'
-import { launchGame, cancelLaunch } from './services/game'
+import { launchGame, cancelLaunch, repairInstance } from './services/game'
 import { getSettings, setSettings, systemRamMb } from './services/settings'
 import * as dev from './services/dev'
 import * as r2 from './services/r2'
@@ -27,6 +27,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.redeemCode, (_e, code: string) => instances.redeemCode(code))
   ipcMain.handle(IPC.getInstances, () => instances.getInstances())
   ipcMain.handle(IPC.removeGroup, (_e, groupId: string) => instances.removeGroup(groupId))
+  ipcMain.handle(IPC.customizeInstanceImage, (_e, id: string) =>
+    instances.customizeImage(getWindow(), id),
+  )
+  ipcMain.handle(IPC.customizeInstanceBackground, (_e, id: string) =>
+    instances.customizeBackground(getWindow(), id),
+  )
+  ipcMain.handle(IPC.resetInstanceCustomization, (_e, id: string, what: 'image' | 'background' | 'all') =>
+    instances.resetCustomization(id, what),
+  )
 
   // --- Autenticación (Fase 2) ----------------------------------------------
   ipcMain.handle(IPC.login, async () => {
@@ -135,17 +144,24 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
 
   // --- Jugar (Fase 3) ------------------------------------------------------
   // Sincronización del modpack (Fase 5) -> descarga/lanzamiento (Fase 3).
-  ipcMain.handle(IPC.play, async (_e, instanceId: string) => {
+  ipcMain.handle(IPC.play, async (_e, instanceId: string, connection?: 'playit' | 'zerotier') => {
     const instance = instances.getInstance(instanceId)
     if (!instance) throw new Error('No se encontró la instancia.')
     const account = auth.getStoredAccount()
     if (!account) throw new Error('No has iniciado sesión.')
 
+    // Resuelve la dirección del servidor según la conexión elegida por el
+    // jugador (PLAYIT por defecto; ZeroTier si la pidió y está configurada).
+    const serverAddress =
+      connection === 'zerotier' && instance.zerotierAddress
+        ? instance.zerotierAddress
+        : instance.serverAddress
+
     try {
       const { maxRamMb, autoJoin } = getSettings()
       await launchGame({
         account,
-        instance,
+        instance: { ...instance, serverAddress },
         maxRamMb,
         autoJoin,
         onProgress: emitProgress,
@@ -169,4 +185,5 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
     win?.restore()
     win?.focus()
   })
+  ipcMain.handle(IPC.repairInstance, () => repairInstance())
 }

@@ -68,6 +68,7 @@ export function listGroups(): DevGroup[] {
             loader: m.loader ?? '',
             loaderVersion: m.loaderVersion ?? '',
             serverAddress: m.serverAddress ?? '',
+            zerotierAddress: m.zerotierAddress ?? '',
             description: m.description ?? '',
             version: m.version ?? '0.0.1',
             hasImage: fs.existsSync(path.join(instDir, 'icon.png')),
@@ -148,6 +149,7 @@ export function createInstance(groupId: string, meta: NewInstance): string {
         loader: meta.loader,
         loaderVersion: meta.loaderVersion,
         serverAddress: meta.serverAddress,
+        zerotierAddress: meta.zerotierAddress ?? '',
         description: meta.description ?? '',
         version: meta.version ?? '0.0.1',
         published: false,
@@ -167,7 +169,7 @@ export function updateInstance(
 ): void {
   const metaPath = path.join(modpackRoot(), groupId, instanceId, 'instance.json')
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
-  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'description', 'version'] as const) {
+  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'zerotierAddress', 'description', 'version'] as const) {
     if (patch[key] !== undefined) meta[key] = patch[key]
   }
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
@@ -266,6 +268,26 @@ export async function importMrpack(
 }
 
 /**
+ * Sube +1 al "patch" de la versión de cada instancia PUBLICADA del grupo, para
+ * que el sello (badge morado) avance en cada publish. Ej: 0.0.1 → 0.0.2.
+ */
+function bumpPublishedVersions(root: string, groupId: string): void {
+  const groupDir = path.join(root, groupId)
+  for (const e of fs.readdirSync(groupDir, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    const metaPath = path.join(groupDir, e.name, 'instance.json')
+    if (!fs.existsSync(metaPath)) continue
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+    if (meta.published !== true) continue
+    const parts = String(meta.version ?? '0.0.0').split('.')
+    while (parts.length < 3) parts.push('0')
+    parts[2] = String((parseInt(parts[2], 10) || 0) + 1)
+    meta.version = parts.join('.')
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+  }
+}
+
+/**
  * Regenera los manifiestos de todos los grupos y, si R2 está configurado, los
  * sube a la nube. Si no, solo genera local (para servir con `serve-modpack`).
  */
@@ -278,6 +300,8 @@ export async function publishAll(
   const groupIds = listGroupIds(root)
   for (const groupId of groupIds) {
     onProgress?.({ label: `Generando manifiestos de ${groupId}…`, fraction: -1 })
+    // Avanza el sello de versión antes de generar el manifiesto que ve el jugador.
+    bumpPublishedVersions(root, groupId)
     publishGroup(root, groupId, base)
     if (uploadToR2) {
       await r2.uploadGroup(root, groupId, (done, total, label) => {

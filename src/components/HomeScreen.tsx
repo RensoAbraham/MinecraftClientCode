@@ -1,18 +1,19 @@
-import type { Account, Instance } from '../../shared/ipc'
+import type { Account } from '../../shared/ipc'
+import type { Group } from '../App'
 import { SparkleLogo } from './SparkleLogo'
 import homeBgUrl from '../assets/home-bg.mp4'
 
 interface HomeScreenProps {
-  instances: Instance[]
+  groups: Group[]
   account: Account | null
-  onSelectInstance: (instanceId: string) => void
+  onSelectGroup: (groupId: string) => void
 }
 
 /**
  * Pantalla de inicio (botón Home): hero con la marca, saludo a la cuenta activa
- * y una tarjeta por INSTANCIA (cada versión LOW/HIGH por separado).
+ * y una tarjeta por GRUPO (al abrirlo se elige el tipo LOW/HIGH).
  */
-export function HomeScreen({ instances, account, onSelectInstance }: HomeScreenProps) {
+export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) {
   return (
     <main className="relative grid flex-1 place-items-center overflow-y-auto p-8">
       {/* Fondo animado de Inicio (vídeo en bucle, sin audio) con velo para legibilidad */}
@@ -59,28 +60,28 @@ export function HomeScreen({ instances, account, onSelectInstance }: HomeScreenP
           )}
         </div>
 
-        {/* Instancias (una tarjeta por versión) */}
-        {instances.length > 0 ? (
+        {/* Grupos (al abrir uno se elige el tipo) */}
+        {groups.length > 0 ? (
           <div className="mt-10">
             <p className="mb-3 text-center text-xs font-semibold tracking-widest text-white/60 uppercase [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">
               Tus instancias
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              {instances.map((inst) => {
-                const isVideo = inst.backgroundUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(inst.backgroundUrl)
+              {groups.map((g) => {
+                const art = g.instances[0]
+                const isVideo = art?.backgroundUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(art.backgroundUrl)
                 return (
                   <button
-                    key={inst.id}
-                    onClick={() => onSelectInstance(inst.id)}
+                    key={g.groupId}
+                    onClick={() => onSelectGroup(g.groupId)}
                     className="group w-52 overflow-hidden rounded-2xl border border-tenso-border bg-tenso-panel/80 text-left outline-none backdrop-blur transition-transform duration-200 hover:-translate-y-1"
                   >
                     <div className="relative h-32 w-full overflow-hidden bg-tenso-panel-2">
-                      {inst.imageUrl ? (
-                        <img src={inst.imageUrl} alt={inst.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      {art?.imageUrl ? (
+                        <img src={art.imageUrl} alt={g.group} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                       ) : isVideo ? (
-                        // Estático en Inicio (primer fotograma); se anima al entrar.
                         <video
-                          src={inst.backgroundUrl}
+                          src={art.backgroundUrl}
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                           muted
                           playsInline
@@ -91,15 +92,19 @@ export function HomeScreen({ instances, account, onSelectInstance }: HomeScreenP
                         />
                       ) : (
                         <div className="grid h-full place-items-center text-3xl font-black text-tenso-muted">
-                          {inst.name.charAt(0).toUpperCase()}
+                          {g.group.charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-bg/95 via-tenso-bg/10 to-transparent" />
-                      {/* Nombre tal cual se configuró, una sola vez y grande */}
                       <span className="absolute right-3 bottom-2 left-3 truncate text-lg font-bold text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
-                        {inst.name}
+                        {g.group}
                       </span>
                     </div>
+                    {g.instances.length > 1 && (
+                      <p className="px-3 py-2 text-xs text-tenso-muted">
+                        {g.instances.length} tipos · elige al entrar
+                      </p>
+                    )}
                   </button>
                 )
               })}

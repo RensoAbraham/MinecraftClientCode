@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Account as EmlAccount } from 'eml-lib'
@@ -34,6 +35,42 @@ function killGameProcesses(): void {
     execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], () => {})
   } else {
     execFile('pkill', ['-f', `${GAME_ROOT}`], () => {})
+  }
+}
+
+/**
+ * "Repara" la instalación del juego: borra los archivos del modpack y de
+ * Minecraft (mods, configs, librerías, versiones…) para forzar una descarga
+ * limpia en el siguiente JUGAR. CONSERVA `runtime` (Java) y `assets` (texturas,
+ * sonidos) porque son pesados y rara vez se corrompen, así la reparación es
+ * rápida. EML-Lib (`cleaning` + `modpackUrl`) vuelve a bajar lo que falte.
+ *
+ * Como el directorio del juego (`.tensoclient`) es compartido por todas las
+ * instancias, esto repara la instalación entera, no solo una instancia.
+ */
+export function repairInstance(): void {
+  // Mata el juego si estuviera abierto (no se pueden borrar archivos en uso).
+  killGameProcesses()
+
+  // Carpetas que conservamos para no rebajar gigas innecesariamente.
+  const keep = new Set(['runtime', 'assets'])
+
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(GAME_ROOT, { withFileTypes: true })
+  } catch {
+    // Si no existe la carpeta, no hay nada que reparar.
+    return
+  }
+
+  for (const entry of entries) {
+    if (keep.has(entry.name)) continue
+    const target = path.join(GAME_ROOT, entry.name)
+    try {
+      fs.rmSync(target, { recursive: true, force: true })
+    } catch (err) {
+      console.error('[repairInstance] no se pudo borrar', target, err)
+    }
   }
 }
 

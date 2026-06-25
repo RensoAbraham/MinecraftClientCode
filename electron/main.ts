@@ -1,7 +1,19 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, protocol, net } from 'electron'
+import fs from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { registerIpcHandlers } from './ipc'
 import { initUpdater } from './services/updater'
+
+// Protocolo propio para servir archivos locales (imágenes/fondos que la jugadora
+// personaliza). Debe declararse como privilegiado ANTES de que la app esté lista
+// para que el renderer pueda usarlo como recurso seguro (incl. vídeo en bucle).
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'paput-asset',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true },
+  },
+])
 
 // Rutas que vite-plugin-electron define en build/dev.
 // __dirname está disponible porque el proceso principal se compila a CommonJS.
@@ -55,6 +67,13 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Sirve los archivos personalizados (validando que existan) por el protocolo propio.
+  protocol.handle('paput-asset', (request) => {
+    const p = new URL(request.url).searchParams.get('p')
+    if (!p || !fs.existsSync(p)) return new Response('No encontrado', { status: 404 })
+    return net.fetch(pathToFileURL(p).toString())
+  })
+
   registerIpcHandlers(() => mainWindow)
   createWindow()
   initUpdater(() => mainWindow)

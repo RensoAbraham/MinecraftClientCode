@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { InstanceScreen } from './components/InstanceScreen'
 import { AccessGate } from './components/AccessGate'
@@ -10,22 +10,52 @@ import { AccountMenu } from './components/AccountMenu'
 import { SkinEditor } from './components/SkinEditor'
 import { SubscriptionMenu } from './components/SubscriptionMenu'
 import { HomeScreen } from './components/HomeScreen'
+import { VariantSelect } from './components/VariantSelect'
+import { ConnectionSelect } from './components/ConnectionSelect'
+import { PreviewMenu } from './components/PreviewMenu'
+import { GuiaRapida } from './components/GuiaRapida'
 import { UpdateBanner } from './components/UpdateBanner'
-import type { Account, Instance } from '../shared/ipc'
+import type { Account, ConnectionKind, Instance } from '../shared/ipc'
 
 type Mode = 'select' | 'dev' | 'player'
 
-/**
- * Interruptor temporal: oculta el botón de "añadir más grupos con código".
- * Por ahora cada quien usa un único grupo; cuando se quiera reactivar, poner true.
- */
+/** Interruptor temporal: oculta el botón de "añadir más grupos con código". */
 const ALLOW_ADD_GROUP = false
+
+const VARIANTS_KEY = 'paput.variants'
+const CONNECTIONS_KEY = 'paput.connections'
+
+export interface Group {
+  groupId: string
+  group: string
+  instances: Instance[]
+}
+
+/** Métodos de conexión disponibles para una instancia (según lo que el dev configuró). */
+function connectionOptions(inst: Instance): ConnectionKind[] {
+  const opts: ConnectionKind[] = []
+  if (inst.serverAddress) opts.push('playit')
+  if (inst.zerotierAddress) opts.push('zerotier')
+  return opts
+}
+
+/** Agrupa las instancias por grupo, conservando el orden de aparición. */
+function toGroups(instances: Instance[]): Group[] {
+  const order: string[] = []
+  const map = new Map<string, Group>()
+  for (const inst of instances) {
+    if (!map.has(inst.groupId)) {
+      map.set(inst.groupId, { groupId: inst.groupId, group: inst.group, instances: [] })
+      order.push(inst.groupId)
+    }
+    map.get(inst.groupId)!.instances.push(inst)
+  }
+  return order.map((id) => map.get(id)!)
+}
 
 export default function App() {
   const [instances, setInstances] = useState<Instance[]>([])
-  // Instancia abierta (null = pantalla de inicio). Cada versión (LOW/HIGH) es
-  // su propia instancia y se abre directamente, sin selector de variante.
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
   const [checking, setChecking] = useState(true)
   const [isDev, setIsDev] = useState(false)
@@ -35,11 +65,29 @@ export default function App() {
   const [showSkin, setShowSkin] = useState(false)
   const [showSubs, setShowSubs] = useState(false)
   const [adding, setAdding] = useState(false)
-  // Vista previa del login (solo dev): para revisar esa pantalla aun con sesión.
-  const [previewLogin, setPreviewLogin] = useState(false)
-  // El "gag" Premium: la corona está oculta hasta que aparece la primera vez al
-  // pulsar JUGAR. Después queda visible en la barra lateral para reabrirlo.
+  const [changingVariant, setChangingVariant] = useState(false)
+  const [changingConnection, setChangingConnection] = useState(false)
+  const [showPreviews, setShowPreviews] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [premiumSeen, setPremiumSeen] = useState(() => !!localStorage.getItem('paput.premiumGagSeen'))
+
+  // Tipo (instancia) elegido por grupo, recordado en disco.
+  const [variants, setVariants] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(VARIANTS_KEY) ?? '{}')
+    } catch {
+      return {}
+    }
+  })
+
+  // Método de conexión elegido por grupo (PLAYIT/ZEROTIER), recordado en disco.
+  const [connections, setConnections] = useState<Record<string, ConnectionKind>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CONNECTIONS_KEY) ?? '{}')
+    } catch {
+      return {}
+    }
+  })
 
   function triggerPremiumGag() {
     localStorage.setItem('paput.premiumGagSeen', '1')
@@ -58,7 +106,6 @@ export default function App() {
           .catch(() => {}),
       ])
       setInstances(insts)
-      // Arranca en la pantalla de inicio (Home), no en una instancia.
       setIsDev(!!dev)
       setMode(dev ? 'select' : 'player')
       setChecking(false)
@@ -66,22 +113,63 @@ export default function App() {
     bootstrap()
   }, [])
 
+  // Muestra la guía rápida la primera vez que hay sesión iniciada.
+  useEffect(() => {
+    if (account && !localStorage.getItem('paput.guideSeen')) setShowGuide(true)
+  }, [account])
+
+  function closeGuide() {
+    localStorage.setItem('paput.guideSeen', '1')
+    setShowGuide(false)
+  }
+
+  const groups = useMemo(() => toGroups(instances), [instances])
+
+  function chooseVariant(groupId: string, instanceId: string) {
+    setVariants((prev) => {
+      const next = { ...prev, [groupId]: instanceId }
+      localStorage.setItem(VARIANTS_KEY, JSON.stringify(next))
+      return next
+    })
+    setChangingVariant(false)
+  }
+
+  /** Olvida el tipo elegido (desde Ajustes): la próxima vez volverá a preguntar. */
+  function resetVariants() {
+    setVariants({})
+    localStorage.removeItem(VARIANTS_KEY)
+    setChangingVariant(false)
+  }
+
+  function chooseConnection(groupId: string, connection: ConnectionKind) {
+    setConnections((prev) => {
+      const next = { ...prev, [groupId]: connection }
+      localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(next))
+      return next
+    })
+    setChangingConnection(false)
+  }
+
   function handleUnlock(unlocked: Instance[]) {
     if (unlocked.length === 0) return
     setInstances((prev) => {
       const ids = new Set(unlocked.map((i) => i.id))
       return [...prev.filter((i) => !ids.has(i.id)), ...unlocked]
     })
-    setSelectedInstanceId(null) // vuelve al inicio para ver las nuevas tarjetas
+    setSelectedGroupId(null)
     setAdding(false)
+  }
+
+  /** Reemplaza una instancia en el estado (tras personalizar imagen/fondo). */
+  function handleInstanceUpdated(updated: Instance) {
+    setInstances((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
   }
 
   async function handleRemoveGroup(groupId: string) {
     await window.tenso.removeGroup(groupId)
     setInstances((prev) => {
       const next = prev.filter((i) => i.groupId !== groupId)
-      // Si la instancia abierta era de ese grupo, vuelve al inicio.
-      setSelectedInstanceId((cur) => (next.some((i) => i.id === cur) ? cur : null))
+      if (groupId === selectedGroupId) setSelectedGroupId(null)
       return next
     })
   }
@@ -96,44 +184,86 @@ export default function App() {
   if (instances.length === 0) return <AccessGate onUnlock={handleUnlock} onOpenDev={backToSelect} />
   if (!account) return <Login onLogin={setAccount} />
 
-  const activeInstance = selectedInstanceId
-    ? instances.find((i) => i.id === selectedInstanceId) ?? null
-    : null
+  const selectedGroup = selectedGroupId ? groups.find((g) => g.groupId === selectedGroupId) : null
+  const chosenId = selectedGroup ? variants[selectedGroup.groupId] : undefined
+  const activeInstance =
+    selectedGroup?.instances.length === 1
+      ? selectedGroup.instances[0]
+      : selectedGroup?.instances.find((i) => i.id === chosenId)
+  const needsVariant =
+    !!selectedGroup && selectedGroup.instances.length > 1 && (!activeInstance || changingVariant)
+
+  // Tras tener instancia activa: si ofrece varias conexiones y aún no se eligió
+  // (o se está cambiando), pedimos elegir PLAYIT/ZEROTIER con las cartillas.
+  const connOptions = activeInstance ? connectionOptions(activeInstance) : []
+  const chosenConnection = selectedGroup ? connections[selectedGroup.groupId] : undefined
+  const activeConnection: ConnectionKind | undefined =
+    connOptions.length === 1 ? connOptions[0] : connOptions.includes(chosenConnection!) ? chosenConnection : undefined
+  const needsConnection =
+    !needsVariant && !!activeInstance && connOptions.length > 1 && (!activeConnection || changingConnection)
+
+  function selectGroup(id: string) {
+    setSelectedGroupId(id)
+    setChangingVariant(false)
+    setChangingConnection(false)
+  }
 
   return (
     <div className="pixel-grid flex h-full w-full">
       <UpdateBanner />
       <Sidebar
-        instances={instances}
-        selectedInstanceId={selectedInstanceId}
+        groups={groups}
+        selectedGroupId={selectedGroupId}
+        variants={variants}
         account={account}
-        onHome={() => setSelectedInstanceId(null)}
-        onSelectInstance={setSelectedInstanceId}
+        onHome={() => setSelectedGroupId(null)}
+        onSelectGroup={selectGroup}
         onAdd={ALLOW_ADD_GROUP ? () => setAdding(true) : undefined}
         onOpenSettings={() => setShowSettings(true)}
         onOpenAccounts={() => setShowAccounts(true)}
         onOpenSkin={() => setShowSkin(true)}
         onOpenSubs={premiumSeen ? () => setShowSubs(true) : undefined}
         onOpenDev={backToSelect}
-        onPreviewLogin={isDev ? () => setPreviewLogin(true) : undefined}
+        onPreviewLogin={isDev ? () => setShowPreviews(true) : undefined}
       />
 
-      {!activeInstance ? (
-        <HomeScreen
-          instances={instances}
-          account={account}
-          onSelectInstance={setSelectedInstanceId}
+      {!selectedGroup ? (
+        <HomeScreen groups={groups} account={account} onSelectGroup={selectGroup} />
+      ) : needsVariant ? (
+        <VariantSelect
+          groupName={selectedGroup.group}
+          instances={selectedGroup.instances}
+          onChoose={(id) => chooseVariant(selectedGroup.groupId, id)}
+        />
+      ) : needsConnection ? (
+        <ConnectionSelect
+          instance={activeInstance!}
+          onChoose={(conn) => chooseConnection(selectedGroup.groupId, conn)}
         />
       ) : (
         <InstanceScreen
-          instance={activeInstance}
+          instance={activeInstance!}
+          connection={activeConnection}
           onRemoveGroup={handleRemoveGroup}
+          onChangeVariant={
+            selectedGroup.instances.length > 1 ? () => setChangingVariant(true) : undefined
+          }
+          onChangeConnection={
+            connOptions.length > 1 ? () => setChangingConnection(true) : undefined
+          }
+          onCustomized={handleInstanceUpdated}
           premiumSeen={premiumSeen}
           onFirstPlay={triggerPremiumGag}
         />
       )}
 
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <Settings
+          onClose={() => setShowSettings(false)}
+          onResetVariants={resetVariants}
+          onShowGuide={() => setShowGuide(true)}
+        />
+      )}
       {showAccounts && (
         <AccountMenu
           onClose={() => setShowAccounts(false)}
@@ -144,18 +274,8 @@ export default function App() {
       {showSubs && <SubscriptionMenu onClose={() => setShowSubs(false)} />}
       {adding && <AccessGate onUnlock={handleUnlock} onCancel={() => setAdding(false)} />}
 
-      {/* Vista previa del login (solo dev): se ve la pantalla sin cerrar sesión */}
-      {previewLogin && (
-        <div className="fixed inset-0 z-[60]">
-          <Login onLogin={() => setPreviewLogin(false)} />
-          <button
-            onClick={() => setPreviewLogin(false)}
-            className="absolute top-4 right-4 z-10 rounded-lg border border-tenso-border bg-tenso-panel/80 px-4 py-2 text-sm text-tenso-muted backdrop-blur hover:text-tenso-text"
-          >
-            Cerrar vista previa
-          </button>
-        </div>
-      )}
+      {showPreviews && <PreviewMenu onClose={() => setShowPreviews(false)} />}
+      {showGuide && <GuiaRapida onClose={closeGuide} />}
     </div>
   )
 }
