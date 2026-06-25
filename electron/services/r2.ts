@@ -285,7 +285,10 @@ export async function uploadGroup(
       method: 'PUT',
       // Buffer es un Uint8Array válido como cuerpo; el cast es solo por tipos.
       body: new Uint8Array(body) as unknown as BodyInit,
-      headers: { 'Content-Type': contentType(key) },
+      // `no-cache` hace que el borde de Cloudflare revalide contra R2 en vez de
+      // servir una copia vieja tras re-publicar (revalida por ETag, sigue siendo
+      // eficiente con 304).
+      headers: { 'Content-Type': contentType(key), 'Cache-Control': 'no-cache' },
     })
     if (!res.ok) {
       throw new Error(`Error subiendo ${key}: HTTP ${res.status} ${await res.text()}`)

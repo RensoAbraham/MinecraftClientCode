@@ -114,7 +114,10 @@ function clearOverride(instanceId: string, kind: 'icon' | 'background'): void {
 
 /** Descarga group.json y construye las instancias completas del grupo. */
 async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
-  const res = await fetch(`${ref.baseUrl}/${ref.groupId}/group.json`)
+  // Anti-caché: un parámetro único evita que el dominio público (r2.dev) sirva
+  // un group.json viejo tras publicar. `no-store` evita además caché local.
+  const bust = Date.now()
+  const res = await fetch(`${ref.baseUrl}/${ref.groupId}/group.json?t=${bust}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`No se pudo leer el grupo (HTTP ${res.status})`)
   const group = (await res.json()) as GroupJson
 
@@ -131,7 +134,9 @@ async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
     imageUrl: meta.imageUrl,
     backgroundUrl: meta.backgroundUrl,
     description: meta.description,
-    modpackUrl: `${ref.baseUrl}/${ref.groupId}/${meta.id}/modpack.json`,
+    // Igual para el manifiesto del modpack, para que la sincronización vea los
+    // archivos nuevos al instante (no una copia cacheada).
+    modpackUrl: `${ref.baseUrl}/${ref.groupId}/${meta.id}/modpack.json?t=${bust}`,
   }))
 }
 

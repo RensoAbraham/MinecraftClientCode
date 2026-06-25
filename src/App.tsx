@@ -113,6 +113,19 @@ export default function App() {
     bootstrap()
   }, [])
 
+  // Re-lee las instancias desde el hosting (para ver versión/arte nuevos sin reiniciar).
+  async function refreshInstances() {
+    const insts = await window.tenso.getInstances().catch(() => null)
+    if (insts) setInstances(insts)
+  }
+
+  // Refresca al volver la ventana al foco (p. ej. tras publicar desde el Dev).
+  useEffect(() => {
+    const onFocus = () => refreshInstances()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   // Muestra la guía rápida la primera vez que hay sesión iniciada.
   useEffect(() => {
     if (account && !localStorage.getItem('paput.guideSeen')) setShowGuide(true)
@@ -216,7 +229,10 @@ export default function App() {
         selectedGroupId={selectedGroupId}
         variants={variants}
         account={account}
-        onHome={() => setSelectedGroupId(null)}
+        onHome={() => {
+          setSelectedGroupId(null)
+          refreshInstances()
+        }}
         onSelectGroup={selectGroup}
         onAdd={ALLOW_ADD_GROUP ? () => setAdding(true) : undefined}
         onOpenSettings={() => setShowSettings(true)}

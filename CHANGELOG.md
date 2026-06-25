@@ -1,5 +1,9 @@
 # Cambios de Paput Client
 
+## 1.0.6
+- **Las instancias se actualizan solas**: al volver a Inicio o reabrir la ventana, el launcher relee la versión y el contenido más reciente sin tener que reiniciar.
+- Los cambios que publicas se ven **al instante** (se evita servir copias en caché de la nube).
+
 ## 1.0.5
 - **Elegir tipo de instancia** (LOW/HIGH): al abrir un grupo eliges según tu PC; se recuerda y puedes cambiarlo en Ajustes.
 - **Cartillas de conexión** PLAYIT / ZEROTIER: eliges cómo conectar, sin ver IPs.
