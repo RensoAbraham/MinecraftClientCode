@@ -22,7 +22,16 @@ export default defineConfig(({ mode }) => {
   // dentro de cada build de Electron (no se hereda del define de nivel raíz).
   // El Client ID se toma del .env (local) o de la variable de entorno (CI/GitHub
   // Actions, donde no hay .env). El Client ID de Azure es PÚBLICO.
-  const azureClientId = env.AZURE_CLIENT_ID || process.env.AZURE_CLIENT_ID || ''
+  // El Client ID de Azure es PÚBLICO. Se toma del .env (local) o del secret de CI.
+  // Defensa: si por error el valor incluye el prefijo "AZURE_CLIENT_ID=" (pegar la
+  // línea entera del .env como secret) o espacios, se limpia. Y si llega vacío, se
+  // usa el ID público conocido como respaldo para que el login nunca quede roto.
+  const FALLBACK_CLIENT_ID = 'cd53b42b-5314-4455-9073-2285e34bac00'
+  const azureClientId =
+    (env.AZURE_CLIENT_ID || process.env.AZURE_CLIENT_ID || '')
+      .trim()
+      .replace(/^AZURE_CLIENT_ID\s*=\s*/i, '')
+      .trim() || FALLBACK_CLIENT_ID
   const define = {
     __AZURE_CLIENT_ID__: JSON.stringify(azureClientId),
     __APP_VERSION__: JSON.stringify(pkg.version),
