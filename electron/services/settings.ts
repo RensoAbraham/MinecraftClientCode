@@ -10,7 +10,7 @@ import type { Settings } from '../../shared/ipc'
  */
 
 const FILE = 'settings.json'
-const DEFAULTS: Settings = { maxRamMb: 4096, autoJoin: false }
+const DEFAULTS: Settings = { maxRamMb: 4096, autoJoin: false, guideSeen: false }
 
 function settingsPath(): string {
   return path.join(app.getPath('userData'), FILE)

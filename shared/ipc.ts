@@ -73,6 +73,8 @@ export interface Settings {
   maxRamMb: number
   /** Entrar automáticamente al servidor al jugar (quickPlay). Si no, abre el menú. */
   autoJoin: boolean
+  /** ¿Ya se vio la guía rápida? (persistido aquí para que no se repita). */
+  guideSeen?: boolean
 }
 
 /** Una instancia tal como la ve el PANEL DEV. */
@@ -261,6 +263,11 @@ export interface TensoApi {
   setSettings(patch: Partial<Settings>): Promise<Settings>
   /** Abre una URL en el navegador externo del sistema. */
   openExternal(url: string): Promise<void>
+  /**
+   * Limpia la caché de sesión y las cookies (no toca cuentas ni ajustes). Sirve
+   * para arreglar el login de Microsoft si quedó una página de error cacheada.
+   */
+  clearLoginCache(): Promise<void>
   /** Suscribe al estado de la auto-actualización. Devuelve desuscripción. */
   onUpdateStatus(cb: (s: UpdateStatus) => void): () => void
   /** Comprueba manualmente si hay actualización. */
@@ -357,6 +364,7 @@ export const IPC = {
   getSettings: 'tenso:getSettings',
   setSettings: 'tenso:setSettings',
   openExternal: 'tenso:openExternal',
+  clearLoginCache: 'tenso:clearLoginCache',
   updateStatus: 'tenso:updateStatus', // canal de eventos (send)
   updateCheck: 'tenso:updateCheck',
   updateDownload: 'tenso:updateDownload',

@@ -1,5 +1,9 @@
 # Cambios de Paput Client
 
+## 1.0.7
+- **Arreglado el inicio de sesión de Microsoft**: si quedó un error de login "pegado" en caché, ahora se limpia solo al intentar entrar. Además hay un botón **"Limpiar caché"** en Ajustes por si hace falta.
+- **La guía rápida ya no se repite**: se recuerda de forma fiable que ya la viste.
+
 ## 1.0.6
 - **Las instancias se actualizan solas**: al volver a Inicio o reabrir la ventana, el launcher relee la versión y el contenido más reciente sin tener que reiniciar.
 - Los cambios que publicas se ven **al instante** (se evita servir copias en caché de la nube).

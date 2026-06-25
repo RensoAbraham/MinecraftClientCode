@@ -16,6 +16,7 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
   const [loaded, setLoaded] = useState(false)
 
   // Estado de Java.
+  const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
   const [javaBusy, setJavaBusy] = useState(false)
   const [javaProg, setJavaProg] = useState<{ label: string; fraction: number } | null>(null)
@@ -59,6 +60,17 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
     } finally {
       setJavaBusy(false)
       setTimeout(() => setJavaProg(null), 1500)
+    }
+  }
+
+  async function handleClearCache() {
+    setCacheState('clearing')
+    try {
+      await window.tenso.clearLoginCache()
+      setCacheState('done')
+      setTimeout(() => setCacheState('idle'), 4000)
+    } catch {
+      setCacheState('idle')
     }
   }
 
@@ -237,6 +249,23 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
             >
               Guardar
             </button>
+
+            {/* --- Problemas de inicio de sesión --- */}
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <span className="text-sm">
+                <span className="font-medium">¿Problemas para iniciar sesión?</span>
+                <span className="mt-0.5 block text-xs text-tenso-muted">
+                  Limpia la caché de sesión (no borra tus cuentas). Úsalo si el login de Microsoft da error.
+                </span>
+              </span>
+              <button
+                onClick={handleClearCache}
+                disabled={cacheState === 'clearing'}
+                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+              >
+                {cacheState === 'clearing' ? 'Limpiando…' : cacheState === 'done' ? 'Listo ✓' : 'Limpiar caché'}
+              </button>
+            </div>
 
             {/* --- Acerca de --- */}
             <div className="mt-6 border-t border-tenso-border pt-4">

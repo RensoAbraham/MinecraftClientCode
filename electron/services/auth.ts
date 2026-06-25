@@ -86,6 +86,11 @@ async function createAuth(mainWindow: BrowserWindow) {
 /** Inicia sesión con Microsoft (abre la ventana). Añade la cuenta y la activa. */
 export async function login(mainWindow: BrowserWindow | null): Promise<UiAccount | null> {
   if (!mainWindow) return null
+  // Limpia la caché HTTP antes de abrir el login: evita que una página de error
+  // de login.live.com cacheada (p. ej. de cuando la app de Azure aún no estaba
+  // lista) se siga mostrando aunque ya funcione. eml-lib ya limpia las cookies.
+  const { session } = await import('electron')
+  await session.defaultSession.clearCache().catch(() => {})
   const auth = await createAuth(mainWindow)
   let account
   try {

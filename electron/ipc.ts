@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { BrowserWindow, ipcMain, shell, session } from 'electron'
 import { IPC, type Progress } from '../shared/ipc'
 import * as instances from './services/instances'
 import * as auth from './services/auth'
@@ -72,6 +72,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.getSettings, () => ({ ...getSettings(), systemRamMb: systemRamMb() }))
   ipcMain.handle(IPC.setSettings, (_e, patch) => setSettings(patch))
   ipcMain.handle(IPC.openExternal, (_e, url: string) => shell.openExternal(url))
+  ipcMain.handle(IPC.clearLoginCache, async () => {
+    // Borra la caché HTTP (donde se queda la página de error del login) y las
+    // cookies de sesión. No toca localStorage, cuentas (accounts.dat) ni ajustes.
+    await session.defaultSession.clearCache()
+    await session.defaultSession.clearStorageData({ storages: ['cookies'] })
+  })
   ipcMain.handle(IPC.updateCheck, () => checkForUpdate())
   ipcMain.handle(IPC.updateDownload, () => downloadUpdate())
   ipcMain.handle(IPC.updateInstall, () => quitAndInstall())

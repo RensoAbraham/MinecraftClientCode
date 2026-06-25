@@ -69,6 +69,7 @@ export default function App() {
   const [changingConnection, setChangingConnection] = useState(false)
   const [showPreviews, setShowPreviews] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
+  const [guideSeen, setGuideSeen] = useState(true)
   const [premiumSeen, setPremiumSeen] = useState(() => !!localStorage.getItem('paput.premiumGagSeen'))
 
   // Tipo (instancia) elegido por grupo, recordado en disco.
@@ -97,9 +98,10 @@ export default function App() {
 
   useEffect(() => {
     async function bootstrap() {
-      const [insts, dev] = await Promise.all([
+      const [insts, dev, settings] = await Promise.all([
         window.tenso.getInstances().catch(() => [] as Instance[]),
         window.tenso.isDevMode().catch(() => false),
+        window.tenso.getSettings().catch(() => null),
         window.tenso
           .getAccount()
           .then((acc) => acc && setAccount(acc))
@@ -107,6 +109,7 @@ export default function App() {
       ])
       setInstances(insts)
       setIsDev(!!dev)
+      setGuideSeen(settings?.guideSeen ?? false)
       setMode(dev ? 'select' : 'player')
       setChecking(false)
     }
@@ -128,12 +131,14 @@ export default function App() {
 
   // Muestra la guía rápida la primera vez que hay sesión iniciada.
   useEffect(() => {
-    if (account && !localStorage.getItem('paput.guideSeen')) setShowGuide(true)
-  }, [account])
+    if (account && !guideSeen) setShowGuide(true)
+  }, [account, guideSeen])
 
   function closeGuide() {
-    localStorage.setItem('paput.guideSeen', '1')
     setShowGuide(false)
+    setGuideSeen(true)
+    // Se persiste en el archivo de ajustes (fiable, sobrevive a limpiezas de caché).
+    window.tenso.setSettings({ guideSeen: true }).catch(() => {})
   }
 
   const groups = useMemo(() => toGroups(instances), [instances])

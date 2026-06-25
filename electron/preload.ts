@@ -33,6 +33,7 @@ const api: TensoApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
+  clearLoginCache: () => ipcRenderer.invoke(IPC.clearLoginCache),
   onUpdateStatus: (cb: (s: import('../shared/ipc').UpdateStatus) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, s: import('../shared/ipc').UpdateStatus) => cb(s)
     ipcRenderer.on(IPC.updateStatus, listener)
