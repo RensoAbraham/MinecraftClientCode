@@ -66,22 +66,37 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(() => {
-  // Sirve los archivos personalizados (validando que existan) por el protocolo propio.
-  protocol.handle('paput-asset', (request) => {
-    const p = new URL(request.url).searchParams.get('p')
-    if (!p || !fs.existsSync(p)) return new Response('No encontrado', { status: 404 })
-    return net.fetch(pathToFileURL(p).toString())
+// Instancia única: si ya hay un Paput Client abierto, esta segunda copia se
+// cierra y enfoca la ventana existente (en vez de abrir otra app).
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
 
-  registerIpcHandlers(() => mainWindow)
-  createWindow()
-  initUpdater(() => mainWindow)
+  app.whenReady().then(() => {
+    // Sirve los archivos personalizados (validando que existan) por el protocolo propio.
+    protocol.handle('paput-asset', (request) => {
+      const p = new URL(request.url).searchParams.get('p')
+      if (!p || !fs.existsSync(p)) return new Response('No encontrado', { status: 404 })
+      return net.fetch(pathToFileURL(p).toString())
+    })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    registerIpcHandlers(() => mainWindow)
+    createWindow()
+    initUpdater(() => mainWindow)
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

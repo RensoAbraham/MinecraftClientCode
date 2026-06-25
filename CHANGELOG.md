@@ -1,5 +1,8 @@
 # Cambios de Paput Client
 
+## 1.0.8
+- **Una sola ventana**: si Paput Client ya está abierto y lo vuelves a abrir, se enfoca la ventana que ya tienes en vez de abrir otra copia.
+
 ## 1.0.7
 - **Arreglado el inicio de sesión de Microsoft**: si quedó un error de login "pegado" en caché, ahora se limpia solo al intentar entrar. Además hay un botón **"Limpiar caché"** en Ajustes por si hace falta.
 - **La guía rápida ya no se repite**: se recuerda de forma fiable que ya la viste.
