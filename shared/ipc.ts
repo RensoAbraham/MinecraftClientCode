@@ -73,6 +73,8 @@ export interface Settings {
   maxRamMb: number
   /** Entrar automáticamente al servidor al jugar (quickPlay). Si no, abre el menú. */
   autoJoin: boolean
+  /** Tema visual de la app. */
+  theme?: 'dark' | 'light'
   /** ¿Ya se vio la guía rápida? (persistido aquí para que no se repita). */
   guideSeen?: boolean
   /** ¿Ya se vio el gag "Premium" al pulsar JUGAR por primera vez? (una sola vez en la vida de la app). */

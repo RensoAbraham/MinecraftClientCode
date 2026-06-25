@@ -2,20 +2,21 @@ import { useEffect, useState } from 'react'
 
 interface SettingsProps {
   onClose: () => void
-  /** Olvida el tipo de instancia elegido (LOW/HIGH); la próxima vez vuelve a preguntar. */
-  onResetVariants: () => void
   /** Vuelve a abrir la guía rápida. */
   onShowGuide: () => void
+  /** Tema actual y función para cambiarlo (se aplica al instante). */
+  theme: 'dark' | 'light'
+  onSetTheme: (theme: 'dark' | 'light') => void
 }
 
-/** Modal de ajustes: Java, memoria RAM y auto-join. */
-export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProps) {
+/** Modal de ajustes GLOBALES de la app: memoria, auto-join, tema y más opciones. */
+export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsProps) {
   const [maxRamMb, setMaxRamMb] = useState(4096)
   const [systemRamMb, setSystemRamMb] = useState(8192)
   const [autoJoin, setAutoJoin] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
-  // Estado de Java.
+  const [more, setMore] = useState(false)
   const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
   const [javaBusy, setJavaBusy] = useState(false)
@@ -97,66 +98,8 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
 
         {loaded ? (
           <>
-            {/* --- Java --- */}
-            <p className="mb-2 text-xs font-semibold tracking-wide text-tenso-muted uppercase">Java</p>
-            <div className="rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-              {java === null ? (
-                <p className="text-sm text-tenso-muted">Comprobando Java…</p>
-              ) : java.installed ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-green-500/15 text-green-400">
-                    <CheckIcon />
-                  </span>
-                  <span>
-                    <span className="font-medium text-tenso-text">Java 21 listo</span>
-                    {java.version && <span className="text-tenso-muted"> · {java.version}</span>}
-                  </span>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm">
-                    <span className="font-medium text-amber-300">Java 21 no instalado.</span>{' '}
-                    <span className="text-tenso-muted">
-                      Hace falta para jugar (Minecraft 1.21). Se instala solo al pulsar JUGAR, o puedes
-                      instalarlo ahora.
-                    </span>
-                  </p>
-                  <button
-                    onClick={handleInstallJava}
-                    disabled={javaBusy}
-                    className="mt-3 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:opacity-60"
-                  >
-                    {javaBusy ? 'Instalando…' : 'Instalar Java 21'}
-                  </button>
-                </div>
-              )}
-
-              {/* Progreso / error de la instalación */}
-              {javaProg && (
-                <div className="mt-3">
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="anim-pulse text-tenso-text">{javaProg.label}</span>
-                    {javaProg.fraction >= 0 && (
-                      <span className="text-tenso-muted">{Math.round(javaProg.fraction * 100)}%</span>
-                    )}
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-tenso-panel">
-                    <div
-                      className={`h-full rounded-full bg-tenso-accent transition-[width] duration-200 ${javaProg.fraction < 0 ? 'anim-pulse w-1/3' : ''}`}
-                      style={javaProg.fraction >= 0 ? { width: `${javaProg.fraction * 100}%` } : undefined}
-                    />
-                  </div>
-                </div>
-              )}
-              {javaError && (
-                <p className="mt-3 rounded-lg bg-tenso-accent/10 px-3 py-2 text-xs text-tenso-accent-soft">
-                  No se pudo instalar Java: {javaError}. Revisa tu conexión e inténtalo de nuevo.
-                </p>
-              )}
-            </div>
-
-            {/* --- Memoria --- */}
-            <div className="mt-5 mb-2 flex items-center justify-between">
+            {/* --- Memoria RAM --- */}
+            <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-semibold tracking-wide text-tenso-muted uppercase">Memoria RAM</span>
               <div className="flex items-center gap-1.5">
                 <input
@@ -184,7 +127,7 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
               <span>{gb(MIN_RAM)} GB</span>
               <span>{gb(maxRamMb)} GB · Sistema: {gb(systemRamMb)} GB</span>
             </div>
-            <p className="mt-3 text-xs text-tenso-muted">
+            <p className="mt-2 text-xs text-tenso-muted">
               Más RAM ayuda con modpacks pesados, pero no asignes casi toda la del equipo.
             </p>
 
@@ -205,42 +148,27 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
               </span>
             </label>
 
-            {/* --- Tipo de instancia (LOW/HIGH) --- */}
+            {/* --- Tema --- */}
             <div className="mt-5 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-              <span className="text-sm">
-                <span className="font-medium">Tipo de instancia</span>
-                <span className="mt-0.5 block text-xs text-tenso-muted">
-                  Vuelve a elegir LOW/HIGH la próxima vez que abras un grupo con varios tipos.
-                </span>
-              </span>
-              <button
-                onClick={() => {
-                  onResetVariants()
-                  onClose()
-                }}
-                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
-              >
-                Volver a elegir
-              </button>
-            </div>
-
-            {/* --- Guía rápida --- */}
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-              <span className="text-sm">
-                <span className="font-medium">Guía rápida</span>
-                <span className="mt-0.5 block text-xs text-tenso-muted">
-                  Repasa lo básico de PaputClient cuando quieras.
-                </span>
-              </span>
-              <button
-                onClick={() => {
-                  onClose()
-                  onShowGuide()
-                }}
-                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
-              >
-                Ver guía
-              </button>
+              <span className="text-sm font-medium">Tema</span>
+              <div className="flex overflow-hidden rounded-lg border border-tenso-border">
+                <button
+                  onClick={() => onSetTheme('dark')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    theme === 'dark' ? 'bg-tenso-accent text-white' : 'text-tenso-muted hover:text-tenso-text'
+                  }`}
+                >
+                  <MoonIcon /> Oscuro
+                </button>
+                <button
+                  onClick={() => onSetTheme('light')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    theme === 'light' ? 'bg-tenso-accent text-white' : 'text-tenso-muted hover:text-tenso-text'
+                  }`}
+                >
+                  <SunIcon /> Claro
+                </button>
+              </div>
             </div>
 
             <button
@@ -250,22 +178,111 @@ export function Settings({ onClose, onResetVariants, onShowGuide }: SettingsProp
               Guardar
             </button>
 
-            {/* --- Problemas de inicio de sesión --- */}
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-              <span className="text-sm">
-                <span className="font-medium">¿Problemas para iniciar sesión?</span>
-                <span className="mt-0.5 block text-xs text-tenso-muted">
-                  Limpia la caché de sesión (no borra tus cuentas). Úsalo si el login de Microsoft da error.
-                </span>
+            {/* --- Más opciones (plegable): Java, caché, guía --- */}
+            <button
+              onClick={() => setMore((m) => !m)}
+              className="mt-4 flex w-full items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 px-3 py-2.5 text-sm text-tenso-muted hover:text-tenso-text"
+            >
+              <span className="font-medium">Más opciones</span>
+              <span className={`transition-transform ${more ? 'rotate-180' : ''}`}>
+                <ChevronIcon />
               </span>
-              <button
-                onClick={handleClearCache}
-                disabled={cacheState === 'clearing'}
-                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
-              >
-                {cacheState === 'clearing' ? 'Limpiando…' : cacheState === 'done' ? 'Listo ✓' : 'Limpiar caché'}
-              </button>
-            </div>
+            </button>
+
+            {more && (
+              <div className="anim-fade-in mt-3 space-y-3">
+                {/* Java */}
+                <div className="rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-tenso-muted uppercase">Java</p>
+                  {java === null ? (
+                    <p className="text-sm text-tenso-muted">Comprobando Java…</p>
+                  ) : java.installed ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-green-500/15 text-green-400">
+                        <CheckIcon />
+                      </span>
+                      <span>
+                        <span className="font-medium text-tenso-text">Java 21 listo</span>
+                        {java.version && <span className="text-tenso-muted"> · {java.version}</span>}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm">
+                        <span className="font-medium text-amber-300">Java 21 no instalado.</span>{' '}
+                        <span className="text-tenso-muted">
+                          Se instala solo al pulsar JUGAR, o puedes instalarlo ahora.
+                        </span>
+                      </p>
+                      <button
+                        onClick={handleInstallJava}
+                        disabled={javaBusy}
+                        className="mt-3 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:opacity-60"
+                      >
+                        {javaBusy ? 'Instalando…' : 'Instalar Java 21'}
+                      </button>
+                    </div>
+                  )}
+                  {javaProg && (
+                    <div className="mt-3">
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="anim-pulse text-tenso-text">{javaProg.label}</span>
+                        {javaProg.fraction >= 0 && (
+                          <span className="text-tenso-muted">{Math.round(javaProg.fraction * 100)}%</span>
+                        )}
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-tenso-panel">
+                        <div
+                          className={`h-full rounded-full bg-tenso-accent transition-[width] duration-200 ${javaProg.fraction < 0 ? 'anim-pulse w-1/3' : ''}`}
+                          style={javaProg.fraction >= 0 ? { width: `${javaProg.fraction * 100}%` } : undefined}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {javaError && (
+                    <p className="mt-3 rounded-lg bg-tenso-accent/10 px-3 py-2 text-xs text-tenso-accent-soft">
+                      No se pudo instalar Java: {javaError}. Revisa tu conexión e inténtalo de nuevo.
+                    </p>
+                  )}
+                </div>
+
+                {/* Problemas de inicio de sesión */}
+                <div className="flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+                  <span className="text-sm">
+                    <span className="font-medium">¿Problemas para iniciar sesión?</span>
+                    <span className="mt-0.5 block text-xs text-tenso-muted">
+                      Limpia la caché de sesión (no borra tus cuentas).
+                    </span>
+                  </span>
+                  <button
+                    onClick={handleClearCache}
+                    disabled={cacheState === 'clearing'}
+                    className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+                  >
+                    {cacheState === 'clearing' ? 'Limpiando…' : cacheState === 'done' ? 'Listo ✓' : 'Limpiar caché'}
+                  </button>
+                </div>
+
+                {/* Guía rápida */}
+                <div className="flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+                  <span className="text-sm">
+                    <span className="font-medium">Guía rápida</span>
+                    <span className="mt-0.5 block text-xs text-tenso-muted">
+                      Repasa lo básico de PaputClient cuando quieras.
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      onClose()
+                      onShowGuide()
+                    }}
+                    className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
+                  >
+                    Ver guía
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* --- Acerca de --- */}
             <div className="mt-6 border-t border-tenso-border pt-4">
@@ -307,6 +324,31 @@ function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   )
 }

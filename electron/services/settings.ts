@@ -15,6 +15,7 @@ const DEFAULTS: Settings = {
   autoJoin: false,
   guideSeen: false,
   premiumGagSeen: false,
+  theme: 'dark',
 }
 
 function settingsPath(): string {

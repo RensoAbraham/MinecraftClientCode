@@ -17,6 +17,23 @@
   --color-tenso-muted: #8a8a96;
 }
 
+/*
+  Tema claro: sobreescribe las variables de color cuando el <html> tiene
+  data-theme="light". Como las utilidades de Tailwind usan var(--color-...),
+  el cambio se propaga a toda la app al instante. El acento morado se mantiene
+  (un poco más oscuro para que contraste sobre fondo claro).
+*/
+:root[data-theme='light'] {
+  --color-tenso-bg: #f3f3f7;
+  --color-tenso-panel: #ffffff;
+  --color-tenso-panel-2: #e9e9f0;
+  --color-tenso-border: #d6d6e0;
+  --color-tenso-accent: #8b3fe0;
+  --color-tenso-accent-soft: #6f2fc0;
+  --color-tenso-text: #16161c;
+  --color-tenso-muted: #5f5f6c;
+}
+
 html,
 body,
 #root {
@@ -49,6 +66,12 @@ textarea {
     linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 22px 22px;
+}
+/* En tema claro las líneas claras no se verían: usamos líneas oscuras tenues. */
+:root[data-theme='light'] .pixel-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
 }
 
 /*

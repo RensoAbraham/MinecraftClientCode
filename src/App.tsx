@@ -70,6 +70,7 @@ export default function App() {
   const [showPreviews, setShowPreviews] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [guideSeen, setGuideSeen] = useState(true)
+  const [theme, setThemeState] = useState<'dark' | 'light'>('dark')
   const [premiumSeen, setPremiumSeen] = useState(false)
 
   // Tipo (instancia) elegido por grupo, recordado en disco.
@@ -117,6 +118,9 @@ export default function App() {
         (settings?.premiumGagSeen ?? false) || !!localStorage.getItem('paput.premiumGagSeen')
       setGuideSeen(guideDone)
       setPremiumSeen(premiumDone)
+      const t: 'dark' | 'light' = settings?.theme === 'light' ? 'light' : 'dark'
+      setThemeState(t)
+      document.documentElement.dataset.theme = t
       if (guideDone && !settings?.guideSeen) window.tenso.setSettings({ guideSeen: true }).catch(() => {})
       if (premiumDone && !settings?.premiumGagSeen)
         window.tenso.setSettings({ premiumGagSeen: true }).catch(() => {})
@@ -162,11 +166,11 @@ export default function App() {
     setChangingVariant(false)
   }
 
-  /** Olvida el tipo elegido (desde Ajustes): la próxima vez volverá a preguntar. */
-  function resetVariants() {
-    setVariants({})
-    localStorage.removeItem(VARIANTS_KEY)
-    setChangingVariant(false)
+  /** Cambia el tema (claro/oscuro) y lo aplica al instante. */
+  function changeTheme(t: 'dark' | 'light') {
+    setThemeState(t)
+    document.documentElement.dataset.theme = t
+    window.tenso.setSettings({ theme: t }).catch(() => {})
   }
 
   function chooseConnection(groupId: string, connection: ConnectionKind) {
@@ -291,8 +295,9 @@ export default function App() {
       {showSettings && (
         <Settings
           onClose={() => setShowSettings(false)}
-          onResetVariants={resetVariants}
           onShowGuide={() => setShowGuide(true)}
+          theme={theme}
+          onSetTheme={changeTheme}
         />
       )}
       {showAccounts && (

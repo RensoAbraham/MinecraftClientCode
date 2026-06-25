@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.11
+- **Modo claro y oscuro**: elige el tema desde Ajustes.
+- **Ajustes más claros**: arriba lo de siempre (memoria RAM, entrar automático, tema); lo demás (Java, limpiar caché, guía) se agrupa en **"Más opciones"**.
+- **Tipo y conexión por instancia**: ahora se cambian desde una **tuerca al lado de JUGAR**, solo para ese grupo (ya no desde Ajustes globales). Más directo y sin confundir entre grupos.
+
 ## 1.0.10
 - El menú **"Premium"** (broma) aparece **una sola vez** de por vida: ya no vuelve a salir al actualizar la app ni al limpiar la caché (se recuerda de forma fiable).
 

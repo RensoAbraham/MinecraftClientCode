@@ -37,6 +37,7 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
   const [showCustomize, setShowCustomize] = useState(false)
   const [customizing, setCustomizing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showOpts, setShowOpts] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   // Si cambia el fondo (p. ej. tras personalizarlo), reintenta mostrarlo.
@@ -325,6 +326,63 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
         </div>
       )}
 
+      {/* Opciones de ESTA instancia (tipo y conexión). Solo afecta a este grupo. */}
+      {showOpts && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowOpts(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <span className="text-tenso-accent-soft"><GearIcon /></span>
+              Opciones de {instance.group}
+            </h2>
+            <p className="mt-1 text-xs text-tenso-muted">Solo afecta a este grupo, no a los demás.</p>
+
+            {onChangeVariant && (
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+                <span className="text-sm">
+                  <span className="font-medium">Tipo de instancia</span>
+                  <span className="mt-0.5 block text-xs text-tenso-muted">Actual: {instance.name}</span>
+                </span>
+                <button
+                  onClick={() => { setShowOpts(false); onChangeVariant() }}
+                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+                >
+                  Cambiar
+                </button>
+              </div>
+            )}
+
+            {onChangeConnection && (
+              <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+                <span className="text-sm">
+                  <span className="font-medium">Conexión</span>
+                  <span className="mt-0.5 block text-xs text-tenso-muted">
+                    Actual: {connection ? connection.toUpperCase() : '—'}
+                  </span>
+                </span>
+                <button
+                  onClick={() => { setShowOpts(false); onChangeConnection() }}
+                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+                >
+                  Cambiar
+                </button>
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={() => setShowOpts(false)}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmación de reparar instancia */}
       {confirmRepair && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setConfirmRepair(false)}>
@@ -413,22 +471,6 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
                   {connection.toUpperCase()}
                 </span>
               )}
-              {onChangeVariant && (
-                <button
-                  onClick={onChangeVariant}
-                  className="rounded text-tenso-accent-soft underline-offset-2 hover:underline"
-                >
-                  Cambiar tipo
-                </button>
-              )}
-              {onChangeConnection && (
-                <button
-                  onClick={onChangeConnection}
-                  className="rounded text-tenso-accent-soft underline-offset-2 hover:underline"
-                >
-                  Cambiar conexión
-                </button>
-              )}
             </p>
 
             {/* Barra de progreso / estado (vacío cuando está listo) */}
@@ -471,6 +513,16 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
                   className="shrink-0 rounded-xl border border-tenso-border bg-tenso-panel-2 px-4 py-2.5 text-sm font-semibold text-tenso-muted transition-colors hover:border-tenso-accent hover:text-tenso-accent-soft"
                 >
                   Cancelar
+                </button>
+              )}
+              {/* Tuerca: opciones de ESTA instancia (tipo y conexión). Solo si hay algo que elegir. */}
+              {(onChangeVariant || onChangeConnection) && (
+                <button
+                  onClick={() => setShowOpts(true)}
+                  title="Opciones de esta instancia"
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-tenso-border bg-tenso-panel-2 text-tenso-muted transition-all hover:rotate-45 hover:border-tenso-accent hover:text-tenso-accent-soft"
+                >
+                  <GearIcon />
                 </button>
               )}
             </div>
@@ -551,6 +603,14 @@ function ImageIcon() {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="9" cy="9" r="2" />
       <path d="m21 15-4.5-4.5L5 21" />
+    </svg>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M19.14 12.94a7.5 7.5 0 0 0 .05-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.33 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54a.5.5 0 0 0 .5.42h3.84a.5.5 0 0 0 .5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" />
     </svg>
   )
 }
