@@ -70,7 +70,7 @@ export default function App() {
   const [showPreviews, setShowPreviews] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [guideSeen, setGuideSeen] = useState(true)
-  const [premiumSeen, setPremiumSeen] = useState(() => !!localStorage.getItem('paput.premiumGagSeen'))
+  const [premiumSeen, setPremiumSeen] = useState(false)
 
   // Tipo (instancia) elegido por grupo, recordado en disco.
   const [variants, setVariants] = useState<Record<string, string>>(() => {
@@ -91,9 +91,10 @@ export default function App() {
   })
 
   function triggerPremiumGag() {
-    localStorage.setItem('paput.premiumGagSeen', '1')
     setPremiumSeen(true)
     setShowSubs(true)
+    // Se guarda en ajustes (fiable; no se borra al limpiar caché ni al actualizar).
+    window.tenso.setSettings({ premiumGagSeen: true }).catch(() => {})
   }
 
   useEffect(() => {
@@ -109,7 +110,16 @@ export default function App() {
       ])
       setInstances(insts)
       setIsDev(!!dev)
-      setGuideSeen(settings?.guideSeen ?? false)
+      // Migración desde el formato viejo (localStorage) al fiable (ajustes): si ya
+      // estaban marcados antes, lo respetamos para no mostrarlos ni una vez más.
+      const guideDone = (settings?.guideSeen ?? false) || !!localStorage.getItem('paput.guideSeen')
+      const premiumDone =
+        (settings?.premiumGagSeen ?? false) || !!localStorage.getItem('paput.premiumGagSeen')
+      setGuideSeen(guideDone)
+      setPremiumSeen(premiumDone)
+      if (guideDone && !settings?.guideSeen) window.tenso.setSettings({ guideSeen: true }).catch(() => {})
+      if (premiumDone && !settings?.premiumGagSeen)
+        window.tenso.setSettings({ premiumGagSeen: true }).catch(() => {})
       setMode(dev ? 'select' : 'player')
       setChecking(false)
     }

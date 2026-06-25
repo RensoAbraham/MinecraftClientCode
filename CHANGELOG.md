@@ -1,5 +1,8 @@
 # Cambios de Paput Client
 
+## 1.0.10
+- El menú **"Premium"** (broma) aparece **una sola vez** de por vida: ya no vuelve a salir al actualizar la app ni al limpiar la caché (se recuerda de forma fiable).
+
 ## 1.0.9
 - **Arreglado el inicio de sesión de Microsoft de verdad**: en las versiones publicadas el identificador de la app se incrustaba con un texto de más, y Microsoft lo rechazaba. Ahora se limpia siempre. ¡El login premium ya funciona!
 
