@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain, shell, session } from 'electron'
 import { IPC, type Progress } from '../shared/ipc'
 import * as instances from './services/instances'
 import * as auth from './services/auth'
-import { launchGame, cancelLaunch, repairInstance } from './services/game'
+import { launchGame, cancelLaunch, repairInstance, uploadLog, openGameLogs } from './services/game'
 import {
   getSettings,
   setSettings,
@@ -205,4 +205,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
     win?.focus()
   })
   ipcMain.handle(IPC.repairInstance, () => repairInstance())
+  ipcMain.handle(IPC.uploadLog, () => uploadLog())
+  ipcMain.handle(IPC.openGameLogs, () => openGameLogs())
 }

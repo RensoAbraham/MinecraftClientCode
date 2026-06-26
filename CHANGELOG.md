@@ -1,5 +1,8 @@
 # Cambios de Paput Client
 
+## 1.0.16
+- **Reportar errores con un clic**: en Ajustes → "Reportar un error" → **Crear enlace** sube el último error a mclo.gs y te da un **enlace corto** (copiado al portapapeles) para enviárselo a Renso. Botón "Carpeta" para abrir los registros si hace falta.
+
 ## 1.0.15
 - **Tus ajustes personales se respetan**: `options.txt` (controles, sensibilidad, FOV, volumen…) se aplica solo la **primera vez** como punto de partida; después cada jugadora lo personaliza y ya **no se le sobrescribe** al jugar (ni con Reparar). El resto de configs compartidas sí se mantienen iguales para todas.
 

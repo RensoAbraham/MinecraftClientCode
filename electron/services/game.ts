@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { clipboard, shell } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -91,6 +92,63 @@ async function ensureFirstRunOptions(instance: Instance): Promise<void> {
     fs.writeFileSync(optionsPath, Buffer.from(await res.arrayBuffer()))
   } catch {
     /* sin conexión o sin options.txt: no es crítico */
+  }
+}
+
+/** Devuelve el último registro del juego: el crash más reciente o el latest.log. */
+function pickLatestLog(): { file: string; name: string } | null {
+  const crashDir = path.join(GAME_ROOT, 'crash-reports')
+  const logsDir = path.join(GAME_ROOT, 'logs')
+  try {
+    const crashes = fs
+      .readdirSync(crashDir)
+      .filter((f) => f.endsWith('.txt'))
+      .map((f) => ({ f, t: fs.statSync(path.join(crashDir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+    if (crashes[0]) return { file: path.join(crashDir, crashes[0].f), name: crashes[0].f }
+  } catch {
+    /* sin crashes */
+  }
+  const latest = path.join(logsDir, 'latest.log')
+  if (fs.existsSync(latest)) return { file: latest, name: 'latest.log' }
+  return null
+}
+
+/**
+ * Sube el último error del juego a mclo.gs y devuelve un enlace corto para
+ * compartir (y lo copia al portapapeles). Ideal para que las jugadoras reporten
+ * un fallo sin tener que buscar archivos.
+ */
+export async function uploadLog(): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const pick = pickLatestLog()
+  if (!pick) return { ok: false, error: 'No se encontró ningún registro todavía (juega una vez primero).' }
+  let text = fs.readFileSync(pick.file, 'utf8')
+  // mclo.gs admite hasta ~10 MiB; recortamos por si acaso.
+  if (text.length > 9_000_000) text = '… (recortado)\n' + text.slice(-9_000_000)
+  try {
+    const res = await fetch('https://api.mclo.gs/1/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ content: text }).toString(),
+    })
+    const data = (await res.json()) as { success: boolean; url?: string; error?: string }
+    if (data.success && data.url) {
+      clipboard.writeText(data.url)
+      return { ok: true, url: data.url }
+    }
+    return { ok: false, error: data.error || 'mclo.gs no aceptó el registro.' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/** Abre en el explorador la carpeta de registros/crashes del juego. */
+export async function openGameLogs(): Promise<void> {
+  for (const dir of [path.join(GAME_ROOT, 'crash-reports'), path.join(GAME_ROOT, 'logs'), GAME_ROOT]) {
+    if (fs.existsSync(dir)) {
+      await shell.openPath(dir)
+      return
+    }
   }
 }
 

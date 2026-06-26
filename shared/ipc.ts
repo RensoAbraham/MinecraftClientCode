@@ -261,6 +261,13 @@ export interface TensoApi {
    * una descarga limpia en el siguiente JUGAR (conserva Java y los assets).
    */
   repairInstance(): Promise<void>
+  /**
+   * Sube el último error del juego (crash o log) a mclo.gs y devuelve un enlace
+   * corto para compartir. También copia el enlace al portapapeles.
+   */
+  uploadLog(): Promise<{ ok: boolean; url?: string; error?: string }>
+  /** Abre en el explorador la carpeta de registros/crashes del juego. */
+  openGameLogs(): Promise<void>
   /** Suscribe a eventos de progreso. Devuelve la función para desuscribir. */
   onProgress(cb: (p: Progress) => void): () => void
   /** Devuelve los ajustes actuales junto a la RAM total del sistema (MB). */
@@ -381,6 +388,8 @@ export const IPC = {
   play: 'tenso:play',
   cancelPlay: 'tenso:cancelPlay',
   repairInstance: 'tenso:repairInstance',
+  uploadLog: 'tenso:uploadLog',
+  openGameLogs: 'tenso:openGameLogs',
   getSettings: 'tenso:getSettings',
   setSettings: 'tenso:setSettings',
   getInstanceSettings: 'tenso:getInstanceSettings',
