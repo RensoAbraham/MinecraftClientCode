@@ -62,8 +62,16 @@ function walk(dir: string, root: string, acc: string[] = []): string[] {
     if (isExcludedPath(rel)) continue
     if (entry.isDirectory()) walk(full, root, acc)
     else {
-      // Ignora metadatos internos y mods desactivados (.disabled): no se publican.
-      if (rel !== 'instance.json' && rel !== 'modpack.json' && !rel.endsWith('.disabled')) acc.push(rel)
+      // No van al manifiesto: metadatos internos, mods desactivados (.disabled) y
+      // `options.txt` (es PERSONAL: se distribuye aparte solo la primera vez, así
+      // los ajustes de cada jugadora no se sobrescriben en cada partida).
+      if (
+        rel !== 'instance.json' &&
+        rel !== 'modpack.json' &&
+        rel !== 'options.txt' &&
+        !rel.endsWith('.disabled')
+      )
+        acc.push(rel)
     }
   }
   return acc

@@ -1,5 +1,8 @@
 # Cambios de Paput Client
 
+## 1.0.15
+- **Tus ajustes personales se respetan**: `options.txt` (controles, sensibilidad, FOV, volumen…) se aplica solo la **primera vez** como punto de partida; después cada jugadora lo personaliza y ya **no se le sobrescribe** al jugar (ni con Reparar). El resto de configs compartidas sí se mantienen iguales para todas.
+
 ## 1.0.14
 - **Dev — buscador de mods**: filtra la lista de mods al escribir.
 - **Dev — solo se incluye lo útil**: al importar una carpeta y al "Traer del juego" se copian `mods`, `config`, `defaultconfigs`, `resourcepacks` y `options.txt`; se ignoran partidas, logs, crashes, capturas y cachés (y nunca se publican).

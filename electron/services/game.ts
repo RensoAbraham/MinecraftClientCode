@@ -52,8 +52,8 @@ export function repairInstance(): void {
   // Mata el juego si estuviera abierto (no se pueden borrar archivos en uso).
   killGameProcesses()
 
-  // Carpetas que conservamos para no rebajar gigas innecesariamente.
-  const keep = new Set(['runtime', 'assets'])
+  // Conservamos: Java y assets (pesados) y el options.txt personal del jugador.
+  const keep = new Set(['runtime', 'assets', 'options.txt'])
 
   let entries: fs.Dirent[]
   try {
@@ -71,6 +71,26 @@ export function repairInstance(): void {
     } catch (err) {
       console.error('[repairInstance] no se pudo borrar', target, err)
     }
+  }
+}
+
+/**
+ * Aplica el `options.txt` por defecto del modpack SOLO la primera vez (si el
+ * jugador aún no tiene uno). Después, sus ajustes (teclas, sensibilidad, FOV…)
+ * se respetan: `options.txt` no va en el manifiesto y eml-lib lo ignora al limpiar.
+ */
+async function ensureFirstRunOptions(instance: Instance): Promise<void> {
+  if (!instance.modpackUrl) return
+  const optionsPath = path.join(GAME_ROOT, 'options.txt')
+  if (fs.existsSync(optionsPath)) return // ya tiene el suyo → no tocar
+  const url = instance.modpackUrl.replace(/\/modpack\.json(\?.*)?$/, '/files/options.txt')
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return // el modpack no trae options.txt: el juego usa el de por defecto
+    fs.mkdirSync(GAME_ROOT, { recursive: true })
+    fs.writeFileSync(optionsPath, Buffer.from(await res.arrayBuffer()))
+  } catch {
+    /* sin conexión o sin options.txt: no es crítico */
   }
 }
 
@@ -123,6 +143,9 @@ export async function launchGame({
 
   // Registra este lanzamiento como el activo (para poder cancelarlo).
   active = { cancelled: false, onProgress, onGameClosed }
+
+  // Primera vez: aplica el options.txt del modpack como punto de partida.
+  await ensureFirstRunOptions(instance)
 
   // Auto-join: si está activado y la instancia define un servidor, arrancamos
   // con Quick Play (--quickPlayMultiplayer) para entrar directo. Si está
