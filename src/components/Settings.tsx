@@ -14,7 +14,6 @@ interface SettingsProps {
  * La RAM y el auto-join son por INSTANCIA (en la tuerca al lado de JUGAR).
  */
 export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsProps) {
-  const [more, setMore] = useState(false)
   const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
   const [javaBusy, setJavaBusy] = useState(false)
@@ -99,19 +98,8 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
           La memoria RAM y el auto-join ahora se ajustan por instancia, en la <span className="text-tenso-text">tuerca al lado de JUGAR</span>.
         </p>
 
-        {/* --- Más opciones (plegable): Java, caché, guía --- */}
-        <button
-          onClick={() => setMore((m) => !m)}
-          className="mt-4 flex w-full items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 px-3 py-2.5 text-sm text-tenso-muted hover:text-tenso-text"
-        >
-          <span className="font-medium">Más opciones</span>
-          <span className={`transition-transform ${more ? 'rotate-180' : ''}`}>
-            <ChevronIcon />
-          </span>
-        </button>
-
-        {more && (
-          <div className="anim-fade-in mt-3 space-y-3">
+        {/* Java, caché y guía */}
+        <div className="mt-4 space-y-3">
             {/* Java */}
             <div className="rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
               <p className="mb-2 text-xs font-semibold tracking-wide text-tenso-muted uppercase">Java</p>
@@ -200,8 +188,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
                 Ver guía
               </button>
             </div>
-          </div>
-        )}
+        </div>
 
         {/* --- Acerca de --- */}
         <div className="mt-6 border-t border-tenso-border pt-4">
@@ -256,14 +243,6 @@ function SunIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" />
-    </svg>
-  )
-}
-
-function ChevronIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points="6 9 12 15 18 9" />
     </svg>
   )
 }

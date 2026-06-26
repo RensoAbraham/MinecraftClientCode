@@ -197,15 +197,6 @@ export default function App() {
     setInstances((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
   }
 
-  async function handleRemoveGroup(groupId: string) {
-    await window.tenso.removeGroup(groupId)
-    setInstances((prev) => {
-      const next = prev.filter((i) => i.groupId !== groupId)
-      if (groupId === selectedGroupId) setSelectedGroupId(null)
-      return next
-    })
-  }
-
   if (checking) return <div className="pixel-grid h-full w-full" />
   if (mode === 'select') {
     return <ModeSelect onDev={() => setMode('dev')} onPlayer={() => setMode('player')} />
@@ -279,7 +270,6 @@ export default function App() {
         <InstanceScreen
           instance={activeInstance!}
           connection={activeConnection}
-          onRemoveGroup={handleRemoveGroup}
           onChangeVariant={
             selectedGroup.instances.length > 1 ? () => setChangingVariant(true) : undefined
           }

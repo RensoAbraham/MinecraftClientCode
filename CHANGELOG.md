@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.13
+- **Ajustes más simples**: el tema y las demás opciones (Java, caché, guía) se ven directas, sin desplegable.
+- **Tuerca de la instancia = todo en un sitio**: RAM, entrar automático, tipo, conexión, **Personalizar** y **Reparar**. Se quitó el menú de tres puntos (⋯).
+- Se quitó "Quitar grupo".
+
 ## 1.0.12
 - **RAM y "entrar automático" por instancia**: se ajustan en la **tuerca al lado de JUGAR**, al instante y solo para esa instancia. Ajustes globales queda para el tema y "más opciones".
 - **Dev — activar/desactivar mods**: botón "Mods" para encender/apagar un .jar sin borrarlo (ideal para probar Essentials y quitarlo luego).

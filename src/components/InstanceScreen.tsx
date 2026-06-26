@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ConnectionKind, Instance } from '../../shared/ipc'
 import { useProgress } from '../hooks/useProgress'
 
@@ -6,7 +6,6 @@ interface InstanceScreenProps {
   instance: Instance
   /** Conexión elegida (PLAYIT/ZEROTIER) con la que lanzar el juego. */
   connection?: ConnectionKind
-  onRemoveGroup?: (groupId: string) => void
   /** Si el grupo tiene varios tipos, permite volver a elegir. */
   onChangeVariant?: () => void
   /** Si la instancia ofrece varias conexiones, permite volver a elegir. */
@@ -23,20 +22,18 @@ interface InstanceScreenProps {
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVariant, onChangeConnection, onCustomized, premiumSeen, onFirstPlay }: InstanceScreenProps) {
+export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized, premiumSeen, onFirstPlay }: InstanceScreenProps) {
   const progress = useProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bgFailed, setBgFailed] = useState(false)
   const [paused, setPaused] = useState(false)
   const [volume, setVolume] = useState(0.4)
-  const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmRepair, setConfirmRepair] = useState(false)
   const [repairing, setRepairing] = useState(false)
   const [repaired, setRepaired] = useState(false)
   const [showCustomize, setShowCustomize] = useState(false)
   const [customizing, setCustomizing] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [showOpts, setShowOpts] = useState(false)
   const [opts, setOpts] = useState<{ maxRamMb: number; autoJoin: boolean; systemRamMb: number } | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -200,56 +197,6 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
           </div>
           <div className="text-5xl font-light tracking-[0.3em] text-tenso-muted">CLIENT</div>
         </div>
-      </div>
-
-      {/* Menú de acciones (⋯) arriba a la derecha: personalizar, reparar, quitar grupo */}
-      <div className="absolute top-4 right-4 z-20">
-        <button
-          data-tour="instance-menu"
-          onClick={() => setMenuOpen((o) => !o)}
-          title="Acciones de la instancia"
-          className={`grid h-9 w-9 place-items-center rounded-lg backdrop-blur transition-colors ${
-            menuOpen
-              ? 'bg-tenso-panel text-tenso-text'
-              : 'bg-tenso-panel/70 text-tenso-muted hover:bg-tenso-panel hover:text-tenso-text'
-          }`}
-        >
-          {repairing ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="anim-spin" aria-hidden>
-              <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-            </svg>
-          ) : (
-            <DotsIcon />
-          )}
-        </button>
-
-        {menuOpen && (
-          <>
-            {/* Capa para cerrar al hacer clic fuera */}
-            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="anim-fade-in absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-tenso-border bg-tenso-panel shadow-2xl">
-              <MenuItem
-                onClick={() => { setMenuOpen(false); setShowCustomize(true) }}
-                icon={<ImageIcon />}
-                label="Personalizar"
-              />
-              <MenuItem
-                onClick={() => { setMenuOpen(false); setConfirmRepair(true) }}
-                icon={<WrenchIcon />}
-                label="Reparar instancia"
-                disabled={repairing || busy}
-              />
-              {onRemoveGroup && (
-                <MenuItem
-                  onClick={() => { setMenuOpen(false); setConfirmRemove(true) }}
-                  icon={<TrashIcon />}
-                  label="Quitar grupo"
-                  danger
-                />
-              )}
-            </div>
-          </>
-        )}
       </div>
 
       {/* Aviso de reparación completada */}
@@ -435,6 +382,23 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
               </div>
             )}
 
+            {/* Personalizar y reparar (antes en el menú ⋯) */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => { setShowOpts(false); setShowCustomize(true) }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-tenso-border bg-tenso-panel-2 py-2 text-sm text-tenso-muted hover:border-tenso-accent hover:text-tenso-accent-soft"
+              >
+                <ImageIcon /> Personalizar
+              </button>
+              <button
+                onClick={() => { setShowOpts(false); setConfirmRepair(true) }}
+                disabled={repairing || busy}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-tenso-border bg-tenso-panel-2 py-2 text-sm text-tenso-muted hover:border-tenso-accent hover:text-tenso-accent-soft disabled:opacity-50"
+              >
+                <WrenchIcon /> Reparar
+              </button>
+            </div>
+
             <div className="mt-5 flex justify-end">
               <button
                 onClick={() => setShowOpts(false)}
@@ -475,39 +439,6 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
                 className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
               >
                 Reparar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmación de quitar grupo */}
-      {confirmRemove && onRemoveGroup && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setConfirmRemove(false)}>
-          <div
-            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold">Quitar grupo</h2>
-            <p className="mt-2 text-sm text-tenso-muted">
-              ¿Seguro que quieres quitar el grupo <span className="font-semibold text-tenso-text">{instance.group}</span> y
-              todas sus instancias de este equipo? Tendrás que volver a meter el código para recuperarlo.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmRemove(false)}
-                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  setConfirmRemove(false)
-                  onRemoveGroup(instance.groupId)
-                }}
-                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
-              >
-                Quitar grupo
               </button>
             </div>
           </div>
@@ -609,53 +540,6 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
         </div>
       </div>
     </main>
-  )
-}
-
-function MenuItem({
-  onClick,
-  icon,
-  label,
-  disabled,
-  danger,
-}: {
-  onClick: () => void
-  icon: ReactNode
-  label: string
-  disabled?: boolean
-  danger?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        danger
-          ? 'text-tenso-muted hover:bg-tenso-accent/10 hover:text-tenso-accent-soft'
-          : 'text-tenso-text hover:bg-tenso-panel-2'
-      }`}
-    >
-      <span className="shrink-0 text-tenso-muted">{icon}</span>
-      {label}
-    </button>
-  )
-}
-
-function DotsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <circle cx="12" cy="5" r="1.6" />
-      <circle cx="12" cy="12" r="1.6" />
-      <circle cx="12" cy="19" r="1.6" />
-    </svg>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6" />
-    </svg>
   )
 }
 
