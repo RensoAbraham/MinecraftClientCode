@@ -50,6 +50,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
   // Panel de mods abierto: { groupId, instanceId } + lista.
   const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
   const [mods, setMods] = useState<{ name: string; enabled: boolean }[]>([])
+  const [modFilter, setModFilter] = useState('')
   const [pullMsg, setPullMsg] = useState<string | null>(null)
 
   async function reload() {
@@ -188,6 +189,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
       setModsFor(null)
       return
     }
+    setModFilter('')
     setModsFor({ groupId, instanceId })
     setMods(await window.tenso.devListMods(groupId, instanceId))
   }
@@ -621,26 +623,45 @@ export function DevPanel({ onClose }: DevPanelProps) {
                             {/* Panel de mods (activar/desactivar sin borrar) */}
                             {modsFor?.groupId === g.id && modsFor.instanceId === inst.id && (
                               <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
-                                <p className="mb-2 text-xs font-semibold text-tenso-muted">Mods de esta instancia</p>
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                  <p className="text-xs font-semibold text-tenso-muted">
+                                    Mods de esta instancia ({mods.length})
+                                  </p>
+                                  {mods.length > 0 && (
+                                    <input
+                                      type="text"
+                                      value={modFilter}
+                                      onChange={(e) => setModFilter(e.target.value)}
+                                      placeholder="Buscar mod…"
+                                      spellCheck={false}
+                                      className="w-40 rounded-lg border border-tenso-border bg-tenso-panel px-2 py-1 text-xs text-tenso-text outline-none focus:border-tenso-accent"
+                                    />
+                                  )}
+                                </div>
                                 {mods.length === 0 ? (
                                   <p className="text-xs text-tenso-muted">
                                     No hay mods. Usa "Carpeta" para añadir archivos .jar.
                                   </p>
                                 ) : (
-                                  <div className="space-y-1.5">
-                                    {mods.map((m) => (
-                                      <label key={m.name} className="flex cursor-pointer items-center gap-2 text-sm">
-                                        <input
-                                          type="checkbox"
-                                          checked={m.enabled}
-                                          onChange={(e) => toggleMod(m.name, e.target.checked)}
-                                          className="h-4 w-4 accent-tenso-accent"
-                                        />
-                                        <span className={m.enabled ? 'text-tenso-text' : 'text-tenso-muted line-through'}>
-                                          {m.name}
-                                        </span>
-                                      </label>
-                                    ))}
+                                  <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                                    {mods
+                                      .filter((m) => m.name.toLowerCase().includes(modFilter.toLowerCase()))
+                                      .map((m) => (
+                                        <label key={m.name} className="flex cursor-pointer items-center gap-2 text-sm">
+                                          <input
+                                            type="checkbox"
+                                            checked={m.enabled}
+                                            onChange={(e) => toggleMod(m.name, e.target.checked)}
+                                            className="h-4 w-4 accent-tenso-accent"
+                                          />
+                                          <span className={m.enabled ? 'truncate text-tenso-text' : 'truncate text-tenso-muted line-through'}>
+                                            {m.name}
+                                          </span>
+                                        </label>
+                                      ))}
+                                    {mods.filter((m) => m.name.toLowerCase().includes(modFilter.toLowerCase())).length === 0 && (
+                                      <p className="text-xs text-tenso-muted">Sin resultados para "{modFilter}".</p>
+                                    )}
                                   </div>
                                 )}
                                 <p className="mt-2 text-[11px] text-tenso-muted">

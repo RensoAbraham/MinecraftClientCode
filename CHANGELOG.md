@@ -1,5 +1,9 @@
 # Cambios de Paput Client
 
+## 1.0.14
+- **Dev — buscador de mods**: filtra la lista de mods al escribir.
+- **Dev — solo se incluye lo útil**: al importar una carpeta y al "Traer del juego" se copian `mods`, `config`, `defaultconfigs`, `resourcepacks` y `options.txt`; se ignoran partidas, logs, crashes, capturas y cachés (y nunca se publican).
+
 ## 1.0.13
 - **Ajustes más simples**: el tema y las demás opciones (Java, caché, guía) se ven directas, sin desplegable.
 - **Tuerca de la instancia = todo en un sitio**: RAM, entrar automático, tipo, conexión, **Personalizar** y **Reparar**. Se quitó el menú de tres puntos (⋯).

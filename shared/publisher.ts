@@ -35,12 +35,33 @@ function typeFor(relPosix: string): EmlFileType {
   return 'OTHER'
 }
 
+/**
+ * Carpetas que NUNCA se publican (datos personales / basura / caché): partidas,
+ * logs, crashes, capturas, datos de mapas, cachés generadas. Si por error entran
+ * en la instancia (al importar o al "traer del juego"), igual quedan fuera.
+ */
+export const EXCLUDED_TOP = new Set([
+  'saves',
+  'logs',
+  'crash-reports',
+  'screenshots',
+  'xaero',
+  '.mixin.out',
+  'dynamic-resource-pack-cache',
+])
+
+/** ¿La ruta (relativa POSIX) cae bajo una carpeta excluida (primer segmento)? */
+export function isExcludedPath(relPosix: string): boolean {
+  return EXCLUDED_TOP.has(relPosix.split('/')[0])
+}
+
 function walk(dir: string, root: string, acc: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
+    const rel = path.relative(root, full).split(path.sep).join('/')
+    if (isExcludedPath(rel)) continue
     if (entry.isDirectory()) walk(full, root, acc)
     else {
-      const rel = path.relative(root, full).split(path.sep).join('/')
       // Ignora metadatos internos y mods desactivados (.disabled): no se publican.
       if (rel !== 'instance.json' && rel !== 'modpack.json' && !rel.endsWith('.disabled')) acc.push(rel)
     }

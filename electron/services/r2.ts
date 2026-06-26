@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { AwsClient } from 'aws4fetch'
 import type { R2ConfigInput, R2ConfigView } from '../../shared/ipc'
+import { isExcludedPath } from '../../shared/publisher'
 
 /**
  * Subida de modpacks a Cloudflare R2 (S3-compatible) usando aws4fetch.
@@ -257,8 +258,8 @@ function walk(dir: string, root: string, acc: string[] = []): string[] {
     if (entry.isDirectory()) walk(full, root, acc)
     else {
       const rel = path.relative(root, full).split(path.sep).join('/')
-      // No subir metadatos internos ni mods desactivados (.disabled).
-      if (rel !== 'instance.json' && !rel.endsWith('.disabled')) acc.push(rel)
+      // No subir metadatos internos, mods desactivados (.disabled) ni carpetas excluidas.
+      if (rel !== 'instance.json' && !rel.endsWith('.disabled') && !isExcludedPath(rel)) acc.push(rel)
     }
   }
   return acc

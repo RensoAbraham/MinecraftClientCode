@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { DevGroup, NewInstance } from '../../shared/ipc'
 import { encodeGroupCode } from '../../shared/instance-code'
-import { publishGroup, listGroupIds } from '../../shared/publisher'
+import { publishGroup, listGroupIds, EXCLUDED_TOP } from '../../shared/publisher'
 import * as r2 from './r2'
 import { importMrpack as runImportMrpack, type ImportProgress, type MrImportResult } from './importers/mrpack'
 
@@ -96,10 +96,11 @@ export function setPublished(groupId: string, instanceId: string, published: boo
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 }
 
-/** Cuenta los archivos del modpack de una instancia (sin los .json internos ni mods desactivados). */
+/** Cuenta los archivos del modpack de una instancia (sin .json internos, .disabled ni carpetas excluidas). */
 function countFiles(instDir: string): number {
   let count = 0
   for (const e of fs.readdirSync(instDir, { withFileTypes: true })) {
+    if (EXCLUDED_TOP.has(e.name)) continue
     if (e.isDirectory()) count += countFiles(path.join(instDir, e.name))
     else if (e.name !== 'instance.json' && e.name !== 'modpack.json' && !e.name.endsWith('.disabled'))
       count++
@@ -107,15 +108,15 @@ function countFiles(instDir: string): number {
   return count
 }
 
-/** Carpeta `config` del JUEGO (donde Minecraft/FancyMenu escriben al editar dentro). */
-function gameConfigDir(): string {
+/** Carpeta raíz del JUEGO (.tensoclient), donde Minecraft escribe al jugar/editar. */
+function gameRootDir(): string {
   const appData =
     process.platform === 'win32'
       ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
       : process.platform === 'darwin'
         ? path.join(os.homedir(), 'Library', 'Application Support')
         : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
-  return path.join(appData, '.tensoclient', 'config')
+  return path.join(appData, '.tensoclient')
 }
 
 /** Lista los mods de una instancia con su estado (activado / desactivado). */
@@ -151,24 +152,35 @@ export function setModEnabled(
 }
 
 /**
- * Copia la carpeta `config` del JUEGO (lo editado dentro de Minecraft) de vuelta
- * a la instancia, para poder publicar esos cambios. Devuelve cuántos archivos copió.
+ * Trae del JUEGO (.tensoclient) lo que editaste dentro de Minecraft de vuelta a
+ * la instancia, para poder publicarlo. Solo copia lo que vale la pena distribuir:
+ * `config/`, `defaultconfigs/`, `resourcepacks/` y `options.txt`. NO copia mods
+ * (se gestionan en Dev) ni datos personales/basura (saves, logs, etc.).
  */
 export function pullGameConfig(groupId: string, instanceId: string): { copied: number } {
-  const src = gameConfigDir()
-  if (!fs.existsSync(src)) return { copied: 0 }
-  const dest = path.join(modpackRoot(), groupId, instanceId, 'config')
-  fs.mkdirSync(dest, { recursive: true })
-  fs.cpSync(src, dest, { recursive: true })
-  // Cuenta archivos copiados (los del config del juego).
+  const gameRoot = gameRootDir()
+  const dest = path.join(modpackRoot(), groupId, instanceId)
+  const ITEMS = ['config', 'defaultconfigs', 'resourcepacks', 'options.txt']
   let copied = 0
-  const walk = (dir: string) => {
+  const countIn = (dir: string) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory()) walk(path.join(dir, e.name))
+      if (e.isDirectory()) countIn(path.join(dir, e.name))
       else copied++
     }
   }
-  walk(src)
+  for (const item of ITEMS) {
+    const src = path.join(gameRoot, item)
+    if (!fs.existsSync(src)) continue
+    const target = path.join(dest, item)
+    if (fs.statSync(src).isDirectory()) {
+      fs.mkdirSync(target, { recursive: true })
+      fs.cpSync(src, target, { recursive: true })
+      countIn(src)
+    } else {
+      fs.copyFileSync(src, target)
+      copied++
+    }
+  }
   return { copied }
 }
 
@@ -314,10 +326,13 @@ export async function importFolder(
 
   const src = result.filePaths[0]
   const destDir = path.join(modpackRoot(), groupId, instanceId)
-  // Copia el contenido de la carpeta elegida dentro de la instancia.
-  for (const entry of fs.readdirSync(src)) {
-    if (entry === 'instance.json' || entry === 'modpack.json') continue
-    fs.cpSync(path.join(src, entry), path.join(destDir, entry), { recursive: true })
+  // Solo copiamos lo que vale la pena del modpack (evita saves, logs, capturas…).
+  const INCLUDE_DIRS = new Set(['mods', 'config', 'defaultconfigs', 'resourcepacks'])
+  const INCLUDE_FILES = new Set(['options.txt'])
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const ok = entry.isDirectory() ? INCLUDE_DIRS.has(entry.name) : INCLUDE_FILES.has(entry.name)
+    if (!ok) continue
+    fs.cpSync(path.join(src, entry.name), path.join(destDir, entry.name), { recursive: true })
   }
   return true
 }
