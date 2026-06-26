@@ -3,7 +3,13 @@ import { IPC, type Progress } from '../shared/ipc'
 import * as instances from './services/instances'
 import * as auth from './services/auth'
 import { launchGame, cancelLaunch, repairInstance } from './services/game'
-import { getSettings, setSettings, systemRamMb } from './services/settings'
+import {
+  getSettings,
+  setSettings,
+  systemRamMb,
+  getInstanceSettings,
+  setInstanceSettings,
+} from './services/settings'
 import * as dev from './services/dev'
 import * as r2 from './services/r2'
 import { getLoaderVersions } from './services/loaders'
@@ -71,6 +77,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   // --- Ajustes -------------------------------------------------------------
   ipcMain.handle(IPC.getSettings, () => ({ ...getSettings(), systemRamMb: systemRamMb() }))
   ipcMain.handle(IPC.setSettings, (_e, patch) => setSettings(patch))
+  ipcMain.handle(IPC.getInstanceSettings, (_e, id: string) => getInstanceSettings(id))
+  ipcMain.handle(IPC.setInstanceSettings, (_e, id: string, patch) => setInstanceSettings(id, patch))
   ipcMain.handle(IPC.openExternal, (_e, url: string) => shell.openExternal(url))
   ipcMain.handle(IPC.clearLoginCache, async () => {
     // Borra la caché HTTP (donde se queda la página de error del login) y las
@@ -135,6 +143,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
     dev.importMrpack(getWindow(), g, (p) => getWindow()?.webContents.send(IPC.devImportProgress, p)),
   )
   ipcMain.handle(IPC.devOpenFolder, (_e, g: string, i: string) => dev.openInstanceFolder(g, i))
+  ipcMain.handle(IPC.devListMods, (_e, g: string, i: string) => dev.listMods(g, i))
+  ipcMain.handle(IPC.devSetModEnabled, (_e, g: string, i: string, name: string, enabled: boolean) =>
+    dev.setModEnabled(g, i, name, enabled),
+  )
+  ipcMain.handle(IPC.devPullGameConfig, (_e, g: string, i: string) => dev.pullGameConfig(g, i))
   ipcMain.handle(IPC.devLoaderVersions, (_e, loader, mcVersion: string) =>
     getLoaderVersions(loader, mcVersion),
   )
@@ -164,7 +177,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
         : instance.serverAddress
 
     try {
-      const { maxRamMb, autoJoin } = getSettings()
+      const { maxRamMb, autoJoin } = getInstanceSettings(instanceId)
       await launchGame({
         account,
         instance: { ...instance, serverAddress },

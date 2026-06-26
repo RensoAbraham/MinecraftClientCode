@@ -41,7 +41,8 @@ function walk(dir: string, root: string, acc: string[] = []): string[] {
     if (entry.isDirectory()) walk(full, root, acc)
     else {
       const rel = path.relative(root, full).split(path.sep).join('/')
-      if (rel !== 'instance.json' && rel !== 'modpack.json') acc.push(rel)
+      // Ignora metadatos internos y mods desactivados (.disabled): no se publican.
+      if (rel !== 'instance.json' && rel !== 'modpack.json' && !rel.endsWith('.disabled')) acc.push(rel)
     }
   }
   return acc

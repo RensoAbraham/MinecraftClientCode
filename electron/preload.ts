@@ -32,6 +32,9 @@ const api: TensoApi = {
   repairInstance: () => ipcRenderer.invoke(IPC.repairInstance),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
+  getInstanceSettings: (instanceId) => ipcRenderer.invoke(IPC.getInstanceSettings, instanceId),
+  setInstanceSettings: (instanceId, patch) =>
+    ipcRenderer.invoke(IPC.setInstanceSettings, instanceId, patch),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   clearLoginCache: () => ipcRenderer.invoke(IPC.clearLoginCache),
   onUpdateStatus: (cb: (s: import('../shared/ipc').UpdateStatus) => void) => {
@@ -84,6 +87,11 @@ const api: TensoApi = {
   },
   devOpenFolder: (groupId, instanceId) =>
     ipcRenderer.invoke(IPC.devOpenFolder, groupId, instanceId),
+  devListMods: (groupId, instanceId) => ipcRenderer.invoke(IPC.devListMods, groupId, instanceId),
+  devSetModEnabled: (groupId, instanceId, name, enabled) =>
+    ipcRenderer.invoke(IPC.devSetModEnabled, groupId, instanceId, name, enabled),
+  devPullGameConfig: (groupId, instanceId) =>
+    ipcRenderer.invoke(IPC.devPullGameConfig, groupId, instanceId),
   devLoaderVersions: (loader, mcVersion) =>
     ipcRenderer.invoke(IPC.devLoaderVersions, loader, mcVersion),
   getR2Config: () => ipcRenderer.invoke(IPC.getR2Config),

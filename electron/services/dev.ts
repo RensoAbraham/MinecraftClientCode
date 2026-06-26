@@ -1,5 +1,6 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { DevGroup, NewInstance } from '../../shared/ipc'
 import { encodeGroupCode } from '../../shared/instance-code'
@@ -95,14 +96,80 @@ export function setPublished(groupId: string, instanceId: string, published: boo
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
 }
 
-/** Cuenta los archivos del modpack de una instancia (sin los .json internos). */
+/** Cuenta los archivos del modpack de una instancia (sin los .json internos ni mods desactivados). */
 function countFiles(instDir: string): number {
   let count = 0
   for (const e of fs.readdirSync(instDir, { withFileTypes: true })) {
     if (e.isDirectory()) count += countFiles(path.join(instDir, e.name))
-    else if (e.name !== 'instance.json' && e.name !== 'modpack.json') count++
+    else if (e.name !== 'instance.json' && e.name !== 'modpack.json' && !e.name.endsWith('.disabled'))
+      count++
   }
   return count
+}
+
+/** Carpeta `config` del JUEGO (donde Minecraft/FancyMenu escriben al editar dentro). */
+function gameConfigDir(): string {
+  const appData =
+    process.platform === 'win32'
+      ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
+      : process.platform === 'darwin'
+        ? path.join(os.homedir(), 'Library', 'Application Support')
+        : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
+  return path.join(appData, '.tensoclient', 'config')
+}
+
+/** Lista los mods de una instancia con su estado (activado / desactivado). */
+export function listMods(groupId: string, instanceId: string): { name: string; enabled: boolean }[] {
+  const modsDir = path.join(modpackRoot(), groupId, instanceId, 'mods')
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(modsDir)
+  } catch {
+    return []
+  }
+  return files
+    .filter((f) => f.endsWith('.jar') || f.endsWith('.jar.disabled'))
+    .map((f) => ({
+      name: f.endsWith('.disabled') ? f.slice(0, -'.disabled'.length) : f,
+      enabled: !f.endsWith('.disabled'),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Activa/desactiva un mod renombrando .jar <-> .jar.disabled (no lo borra). */
+export function setModEnabled(
+  groupId: string,
+  instanceId: string,
+  name: string,
+  enabled: boolean,
+): void {
+  const modsDir = path.join(modpackRoot(), groupId, instanceId, 'mods')
+  const active = path.join(modsDir, name)
+  const disabled = path.join(modsDir, `${name}.disabled`)
+  if (enabled && fs.existsSync(disabled)) fs.renameSync(disabled, active)
+  else if (!enabled && fs.existsSync(active)) fs.renameSync(active, disabled)
+}
+
+/**
+ * Copia la carpeta `config` del JUEGO (lo editado dentro de Minecraft) de vuelta
+ * a la instancia, para poder publicar esos cambios. Devuelve cuántos archivos copió.
+ */
+export function pullGameConfig(groupId: string, instanceId: string): { copied: number } {
+  const src = gameConfigDir()
+  if (!fs.existsSync(src)) return { copied: 0 }
+  const dest = path.join(modpackRoot(), groupId, instanceId, 'config')
+  fs.mkdirSync(dest, { recursive: true })
+  fs.cpSync(src, dest, { recursive: true })
+  // Cuenta archivos copiados (los del config del juego).
+  let copied = 0
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(dir, e.name))
+      else copied++
+    }
+  }
+  walk(src)
+  return { copied }
 }
 
 /** Abre la carpeta de una instancia en el explorador del sistema. */

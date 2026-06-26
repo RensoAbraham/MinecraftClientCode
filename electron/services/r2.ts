@@ -257,7 +257,8 @@ function walk(dir: string, root: string, acc: string[] = []): string[] {
     if (entry.isDirectory()) walk(full, root, acc)
     else {
       const rel = path.relative(root, full).split(path.sep).join('/')
-      if (rel !== 'instance.json') acc.push(rel)
+      // No subir metadatos internos ni mods desactivados (.disabled).
+      if (rel !== 'instance.json' && !rel.endsWith('.disabled')) acc.push(rel)
     }
   }
   return acc

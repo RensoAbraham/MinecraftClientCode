@@ -41,3 +41,32 @@ export function setSettings(patch: Partial<Settings>): Settings {
 export function systemRamMb(): number {
   return Math.floor(os.totalmem() / 1024 / 1024)
 }
+
+/**
+ * Ajustes EFECTIVOS de una instancia: usa los propios si los tiene, y si no, el
+ * valor global como predeterminado. Así cada instancia puede tener su RAM/auto-join.
+ */
+export function getInstanceSettings(instanceId: string): {
+  maxRamMb: number
+  autoJoin: boolean
+  systemRamMb: number
+} {
+  const s = getSettings()
+  const own = s.instanceSettings?.[instanceId] ?? {}
+  return {
+    maxRamMb: own.maxRamMb ?? s.maxRamMb ?? 4096,
+    autoJoin: own.autoJoin ?? s.autoJoin ?? false,
+    systemRamMb: systemRamMb(),
+  }
+}
+
+/** Cambia los ajustes propios de una instancia (mezcla con los que ya tuviera). */
+export function setInstanceSettings(
+  instanceId: string,
+  patch: { maxRamMb?: number; autoJoin?: boolean },
+): void {
+  const s = getSettings()
+  const map = { ...(s.instanceSettings ?? {}) }
+  map[instanceId] = { ...(map[instanceId] ?? {}), ...patch }
+  setSettings({ instanceSettings: map })
+}

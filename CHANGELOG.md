@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.12
+- **RAM y "entrar automático" por instancia**: se ajustan en la **tuerca al lado de JUGAR**, al instante y solo para esa instancia. Ajustes globales queda para el tema y "más opciones".
+- **Dev — activar/desactivar mods**: botón "Mods" para encender/apagar un .jar sin borrarlo (ideal para probar Essentials y quitarlo luego).
+- **Dev — "Traer del juego"**: copia la config que editaste DENTRO de Minecraft (FancyMenu, arreglos de bugs en configs…) de vuelta a la instancia, lista para Publicar.
+
 ## 1.0.11
 - **Modo claro y oscuro**: elige el tema desde Ajustes.
 - **Ajustes más claros**: arriba lo de siempre (memoria RAM, entrar automático, tema); lo demás (Java, limpiar caché, guía) se agrupa en **"Más opciones"**.

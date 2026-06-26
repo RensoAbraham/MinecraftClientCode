@@ -79,6 +79,8 @@ export interface Settings {
   guideSeen?: boolean
   /** ¿Ya se vio el gag "Premium" al pulsar JUGAR por primera vez? (una sola vez en la vida de la app). */
   premiumGagSeen?: boolean
+  /** Ajustes propios por instancia (RAM y auto-join). Si falta, se usa el valor por defecto. */
+  instanceSettings?: Record<string, { maxRamMb?: number; autoJoin?: boolean }>
 }
 
 /** Una instancia tal como la ve el PANEL DEV. */
@@ -265,6 +267,10 @@ export interface TensoApi {
   getSettings(): Promise<Settings & { systemRamMb: number }>
   /** Actualiza ajustes (parcial). */
   setSettings(patch: Partial<Settings>): Promise<Settings>
+  /** Ajustes EFECTIVOS de una instancia (RAM y auto-join propios o el valor por defecto). */
+  getInstanceSettings(instanceId: string): Promise<{ maxRamMb: number; autoJoin: boolean; systemRamMb: number }>
+  /** Cambia los ajustes propios de una instancia (RAM y/o auto-join). */
+  setInstanceSettings(instanceId: string, patch: { maxRamMb?: number; autoJoin?: boolean }): Promise<void>
   /** Abre una URL en el navegador externo del sistema. */
   openExternal(url: string): Promise<void>
   /**
@@ -331,6 +337,16 @@ export interface TensoApi {
   onDevImportProgress(cb: (p: { label: string; fraction: number }) => void): () => void
   /** Abre la carpeta de la instancia en el explorador (para arrastrar mods). */
   devOpenFolder(groupId: string, instanceId: string): Promise<void>
+  /** Lista los mods de una instancia con su estado (activado/desactivado). */
+  devListMods(groupId: string, instanceId: string): Promise<{ name: string; enabled: boolean }[]>
+  /** Activa/desactiva un mod (renombra .jar <-> .jar.disabled, sin borrarlo). */
+  devSetModEnabled(groupId: string, instanceId: string, name: string, enabled: boolean): Promise<void>
+  /**
+   * Copia la carpeta `config` del JUEGO (lo que editaste dentro de Minecraft) de
+   * vuelta a la instancia, para poder publicar esos cambios. Devuelve cuántos
+   * archivos copió.
+   */
+  devPullGameConfig(groupId: string, instanceId: string): Promise<{ copied: number }>
   /** Versiones de loader disponibles para una versión de Minecraft (más reciente primero). */
   devLoaderVersions(loader: string, mcVersion: string): Promise<string[]>
   /** Devuelve la config de R2 (sin el secret) o null si no está configurada. */
@@ -367,6 +383,8 @@ export const IPC = {
   repairInstance: 'tenso:repairInstance',
   getSettings: 'tenso:getSettings',
   setSettings: 'tenso:setSettings',
+  getInstanceSettings: 'tenso:getInstanceSettings',
+  setInstanceSettings: 'tenso:setInstanceSettings',
   openExternal: 'tenso:openExternal',
   clearLoginCache: 'tenso:clearLoginCache',
   updateStatus: 'tenso:updateStatus', // canal de eventos (send)
@@ -396,6 +414,9 @@ export const IPC = {
   devImportMrpack: 'tenso:devImportMrpack',
   devImportProgress: 'tenso:devImportProgress', // canal de eventos (send)
   devOpenFolder: 'tenso:devOpenFolder',
+  devListMods: 'tenso:devListMods',
+  devSetModEnabled: 'tenso:devSetModEnabled',
+  devPullGameConfig: 'tenso:devPullGameConfig',
   devLoaderVersions: 'tenso:devLoaderVersions',
   getR2Config: 'tenso:getR2Config',
   setR2Config: 'tenso:setR2Config',

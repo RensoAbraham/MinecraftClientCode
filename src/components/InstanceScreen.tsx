@@ -38,7 +38,20 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
   const [customizing, setCustomizing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showOpts, setShowOpts] = useState(false)
+  const [opts, setOpts] = useState<{ maxRamMb: number; autoJoin: boolean; systemRamMb: number } | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Carga los ajustes propios de esta instancia al abrir la tuerca.
+  useEffect(() => {
+    if (showOpts) window.tenso.getInstanceSettings(instance.id).then(setOpts)
+  }, [showOpts, instance.id])
+
+  function updateOpts(patch: { maxRamMb?: number; autoJoin?: boolean }) {
+    setOpts((o) => (o ? { ...o, ...patch } : o))
+    window.tenso.setInstanceSettings(instance.id, patch).catch(() => {})
+  }
+
+  const optMaxRam = opts ? Math.max(2048, Math.floor((opts.systemRamMb * 0.9) / 512) * 512) : 8192
 
   // Si cambia el fondo (p. ej. tras personalizarlo), reintenta mostrarlo.
   useEffect(() => {
@@ -337,7 +350,58 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
               <span className="text-tenso-accent-soft"><GearIcon /></span>
               Opciones de {instance.group}
             </h2>
-            <p className="mt-1 text-xs text-tenso-muted">Solo afecta a este grupo, no a los demás.</p>
+            <p className="mt-1 text-xs text-tenso-muted">Solo afecta a esta instancia, no a las demás.</p>
+
+            {/* Memoria RAM (propia de esta instancia) */}
+            <div className="mt-4 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium">Memoria RAM</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={2048}
+                    max={optMaxRam}
+                    step={512}
+                    value={opts?.maxRamMb ?? 4096}
+                    onChange={(e) =>
+                      updateOpts({ maxRamMb: Math.min(optMaxRam, Math.max(2048, Math.round(Number(e.target.value) || 2048))) })
+                    }
+                    className="w-20 rounded-lg border border-tenso-border bg-tenso-panel px-2 py-1 text-right text-sm text-tenso-text outline-none focus:border-tenso-accent"
+                  />
+                  <span className="text-xs text-tenso-muted">MB</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={2048}
+                max={optMaxRam}
+                step={512}
+                value={opts?.maxRamMb ?? 4096}
+                onChange={(e) => updateOpts({ maxRamMb: Number(e.target.value) })}
+                className="w-full accent-tenso-accent"
+              />
+              {opts && (
+                <div className="mt-1 text-right text-xs text-tenso-muted">
+                  {(opts.maxRamMb / 1024).toFixed(1)} GB · Sistema: {(opts.systemRamMb / 1024).toFixed(1)} GB
+                </div>
+              )}
+            </div>
+
+            {/* Entrar automáticamente al servidor (propio de esta instancia) */}
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+              <input
+                type="checkbox"
+                checked={opts?.autoJoin ?? false}
+                onChange={(e) => updateOpts({ autoJoin: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-tenso-accent"
+              />
+              <span className="text-sm">
+                <span className="font-medium">Entrar automáticamente al servidor</span>
+                <span className="mt-0.5 block text-xs text-tenso-muted">
+                  Si lo desactivas, el juego abre en el menú y conectas a mano.
+                </span>
+              </span>
+            </label>
 
             {onChangeVariant && (
               <div className="mt-4 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
@@ -515,16 +579,14 @@ export function InstanceScreen({ instance, connection, onRemoveGroup, onChangeVa
                   Cancelar
                 </button>
               )}
-              {/* Tuerca: opciones de ESTA instancia (tipo y conexión). Solo si hay algo que elegir. */}
-              {(onChangeVariant || onChangeConnection) && (
-                <button
-                  onClick={() => setShowOpts(true)}
-                  title="Opciones de esta instancia"
-                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-tenso-border bg-tenso-panel-2 text-tenso-muted transition-all hover:rotate-45 hover:border-tenso-accent hover:text-tenso-accent-soft"
-                >
-                  <GearIcon />
-                </button>
-              )}
+              {/* Tuerca: opciones de ESTA instancia (RAM, auto-join, tipo, conexión). */}
+              <button
+                onClick={() => setShowOpts(true)}
+                title="Opciones de esta instancia"
+                className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border border-tenso-border bg-tenso-panel-2 text-tenso-muted transition-all hover:rotate-45 hover:border-tenso-accent hover:text-tenso-accent-soft"
+              >
+                <GearIcon />
+              </button>
             </div>
           </div>
 

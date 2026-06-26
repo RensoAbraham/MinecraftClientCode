@@ -47,6 +47,10 @@ export function DevPanel({ onClose }: DevPanelProps) {
   // Edición de una instancia: { groupId, instanceId } + sus campos.
   const [editing, setEditing] = useState<{ groupId: string; instanceId: string } | null>(null)
   const [editForm, setEditForm] = useState<InstancePatch>({})
+  // Panel de mods abierto: { groupId, instanceId } + lista.
+  const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
+  const [mods, setMods] = useState<{ name: string; enabled: boolean }[]>([])
+  const [pullMsg, setPullMsg] = useState<string | null>(null)
 
   async function reload() {
     setGroups(await window.tenso.devListGroups())
@@ -177,6 +181,30 @@ export function DevPanel({ onClose }: DevPanelProps) {
     await window.tenso.devSetPublished(groupId, instanceId, published)
     setDirty(true)
     await reload()
+  }
+
+  async function openMods(groupId: string, instanceId: string) {
+    if (modsFor?.groupId === groupId && modsFor.instanceId === instanceId) {
+      setModsFor(null)
+      return
+    }
+    setModsFor({ groupId, instanceId })
+    setMods(await window.tenso.devListMods(groupId, instanceId))
+  }
+
+  async function toggleMod(name: string, enabled: boolean) {
+    if (!modsFor) return
+    await window.tenso.devSetModEnabled(modsFor.groupId, modsFor.instanceId, name, enabled)
+    setMods(await window.tenso.devListMods(modsFor.groupId, modsFor.instanceId))
+    setDirty(true)
+  }
+
+  async function pullGameConfig(groupId: string, instanceId: string) {
+    const { copied } = await window.tenso.devPullGameConfig(groupId, instanceId)
+    setPullMsg(copied > 0 ? `Traídos ${copied} archivos de config del juego.` : 'No había config del juego que traer.')
+    setDirty(true)
+    setTimeout(() => setPullMsg(null), 5000)
+    reload()
   }
 
   async function importFolder(groupId: string, instanceId: string) {
@@ -529,6 +557,12 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                 <button onClick={() => importFolder(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Copiar mods/configs desde otra carpeta">
                                   <LinkIcon /> Vincular
                                 </button>
+                                <button onClick={() => openMods(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Activar/desactivar mods de esta instancia">
+                                  Mods
+                                </button>
+                                <button onClick={() => pullGameConfig(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Traer la config editada dentro del juego (FancyMenu, etc.) para poder publicarla">
+                                  Traer del juego
+                                </button>
                                 <button
                                   onClick={() => toggle(g.id, inst.id, !inst.published)}
                                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
@@ -583,6 +617,37 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                 </div>
                               </div>
                             )}
+
+                            {/* Panel de mods (activar/desactivar sin borrar) */}
+                            {modsFor?.groupId === g.id && modsFor.instanceId === inst.id && (
+                              <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
+                                <p className="mb-2 text-xs font-semibold text-tenso-muted">Mods de esta instancia</p>
+                                {mods.length === 0 ? (
+                                  <p className="text-xs text-tenso-muted">
+                                    No hay mods. Usa "Carpeta" para añadir archivos .jar.
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {mods.map((m) => (
+                                      <label key={m.name} className="flex cursor-pointer items-center gap-2 text-sm">
+                                        <input
+                                          type="checkbox"
+                                          checked={m.enabled}
+                                          onChange={(e) => toggleMod(m.name, e.target.checked)}
+                                          className="h-4 w-4 accent-tenso-accent"
+                                        />
+                                        <span className={m.enabled ? 'text-tenso-text' : 'text-tenso-muted line-through'}>
+                                          {m.name}
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="mt-2 text-[11px] text-tenso-muted">
+                                  Los desactivados no se publican. Pulsa Publicar para aplicar el cambio.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -591,6 +656,10 @@ export function DevPanel({ onClose }: DevPanelProps) {
                 </section>
               ))}
             </div>
+          )}
+
+          {pullMsg && (
+            <p className="mt-5 rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-300">{pullMsg}</p>
           )}
 
           {dirty && (
