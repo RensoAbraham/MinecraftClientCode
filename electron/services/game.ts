@@ -22,8 +22,22 @@ function appDataFolder(): string {
   return process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config')
 }
 
-/** Carpeta del juego (root 'tensoclient' -> .tensoclient). */
+/** Carpeta raíz del juego (root 'tensoclient' -> .tensoclient). Contiene una subcarpeta por instancia. */
 const GAME_ROOT = path.join(appDataFolder(), '.tensoclient')
+
+/** Sanitiza el id de instancia igual que EML-Lib (para que coincida la carpeta del slug). */
+function slugFor(instanceId: string): string {
+  return instanceId.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
+
+/**
+ * Carpeta propia de cada instancia: `.tensoclient/<slug>`. Cada instancia tiene
+ * su instalación completa, así cambiar entre HIGH/LOW es instantáneo (solo
+ * verifica actualizaciones) y la limpieza afecta solo a esa instancia.
+ */
+function instanceDir(instanceId: string): string {
+  return path.join(GAME_ROOT, slugFor(instanceId))
+}
 
 /**
  * Mata el proceso de Java del juego. Solo afecta al JRE que vive dentro de
@@ -39,54 +53,74 @@ function killGameProcesses(): void {
   }
 }
 
-/**
- * "Repara" la instalación del juego: borra los archivos del modpack y de
- * Minecraft (mods, configs, librerías, versiones…) para forzar una descarga
- * limpia en el siguiente JUGAR. CONSERVA `runtime` (Java) y `assets` (texturas,
- * sonidos) porque son pesados y rara vez se corrompen, así la reparación es
- * rápida. EML-Lib (`cleaning` + `modpackUrl`) vuelve a bajar lo que falte.
- *
- * Como el directorio del juego (`.tensoclient`) es compartido por todas las
- * instancias, esto repara la instalación entera, no solo una instancia.
- */
-/** Borra todo el contenido del juego salvo lo indicado en `keep`. */
-function wipeGameRoot(keep: Set<string>, label: string): void {
+/** Cuenta (rápido) los archivos dentro de una ruta, para ponderar el progreso. */
+function countFilesIn(p: string): number {
+  let n = 0
+  try {
+    for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+      if (e.isDirectory()) n += countFilesIn(path.join(p, e.name))
+      else n++
+    }
+  } catch {
+    /* ignora */
+  }
+  return n
+}
+
+type CleanProgress = (p: { label: string; fraction: number }) => void
+
+/** Borra el contenido de una carpeta de instancia salvo `keep`, con progreso. */
+function wipeDir(dir: string, keep: Set<string>, label: string, onProgress?: CleanProgress): void {
   // Mata el juego si estuviera abierto (no se pueden borrar archivos en uso).
   killGameProcesses()
 
   let entries: fs.Dirent[]
   try {
-    entries = fs.readdirSync(GAME_ROOT, { withFileTypes: true })
+    entries = fs.readdirSync(dir, { withFileTypes: true })
   } catch {
+    onProgress?.({ label: 'Nada que limpiar', fraction: 1 })
     return // no existe la carpeta: nada que borrar
   }
-  for (const entry of entries) {
-    if (keep.has(entry.name)) continue
-    const target = path.join(GAME_ROOT, entry.name)
-    try {
-      fs.rmSync(target, { recursive: true, force: true })
-    } catch (err) {
-      console.error(`[${label}] no se pudo borrar`, target, err)
-    }
-  }
-}
 
-export function repairInstance(): void {
-  // Reparación rápida: conserva Java, recursos (assets), MUNDOS y ajustes; el
-  // resto (mods, configs, versiones, librerías…) se re-descarga al jugar.
-  wipeGameRoot(new Set(['runtime', 'assets', 'saves', 'options.txt']), 'repairInstance')
+  // Pondera cada carpeta por su nº de archivos para una barra coherente.
+  const targets = entries
+    .filter((e) => !keep.has(e.name))
+    .map((e) => {
+      const full = path.join(dir, e.name)
+      return { name: e.name, full, weight: Math.max(1, e.isDirectory() ? countFilesIn(full) : 1) }
+    })
+  const total = targets.reduce((a, t) => a + t.weight, 0)
+
+  let done = 0
+  for (const t of targets) {
+    onProgress?.({ label: `Borrando ${t.name}…`, fraction: total ? done / total : -1 })
+    try {
+      fs.rmSync(t.full, { recursive: true, force: true })
+    } catch (err) {
+      console.error(`[${label}] no se pudo borrar`, t.full, err)
+    }
+    done += t.weight
+    onProgress?.({ label: `Borrando ${t.name}…`, fraction: total ? done / total : 1 })
+  }
+  onProgress?.({ label: 'Limpieza completa', fraction: 1 })
 }
 
 /**
- * Limpieza profunda: borra TODO lo descargado del juego (Java, recursos, mods,
- * versiones, caché, resourcepacks, shaderpacks…) y conserva solo tus mundos
- * (`saves`) y ajustes (`options.txt`). Útil si una instancia quedó mal instalada,
- * al cambiar de versión, o para reclamar espacio. Al siguiente JUGAR se descarga
- * todo de nuevo desde cero. Afecta a la instalación entera (las instancias
- * comparten la carpeta del juego).
+ * Repara SOLO la instancia indicada (su carpeta `.tensoclient/<slug>`): borra
+ * mods/configs/versiones/librerías para forzar una descarga limpia al jugar.
+ * Conserva Java, recursos (assets), mundos y ajustes (rápido). No toca otras instancias.
  */
-export function deepClean(): void {
-  wipeGameRoot(new Set(['saves', 'options.txt']), 'deepClean')
+export function repairInstance(instanceId: string, onProgress?: CleanProgress): void {
+  wipeDir(instanceDir(instanceId), new Set(['runtime', 'assets', 'saves', 'options.txt']), 'repairInstance', onProgress)
+}
+
+/**
+ * Limpieza profunda de SOLO la instancia indicada: borra TODO lo descargado
+ * (Java, recursos, mods, versiones, caché, resourcepacks, shaderpacks…) y conserva
+ * solo sus mundos y ajustes. Reinstala esa instancia desde cero. No toca las demás.
+ */
+export function deepClean(instanceId: string, onProgress?: CleanProgress): void {
+  wipeDir(instanceDir(instanceId), new Set(['saves', 'options.txt']), 'deepClean', onProgress)
 }
 
 /**
@@ -96,36 +130,55 @@ export function deepClean(): void {
  */
 async function ensureFirstRunOptions(instance: Instance): Promise<void> {
   if (!instance.modpackUrl) return
-  const optionsPath = path.join(GAME_ROOT, 'options.txt')
+  const dir = instanceDir(instance.id)
+  const optionsPath = path.join(dir, 'options.txt')
   if (fs.existsSync(optionsPath)) return // ya tiene el suyo → no tocar
   const url = instance.modpackUrl.replace(/\/modpack\.json(\?.*)?$/, '/files/options.txt')
   try {
     const res = await fetch(url)
     if (!res.ok) return // el modpack no trae options.txt: el juego usa el de por defecto
-    fs.mkdirSync(GAME_ROOT, { recursive: true })
+    fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(optionsPath, Buffer.from(await res.arrayBuffer()))
   } catch {
     /* sin conexión o sin options.txt: no es crítico */
   }
 }
 
-/** Devuelve el último registro del juego: el crash más reciente o el latest.log. */
+/**
+ * Devuelve el registro más reciente entre TODAS las instancias (el crash o el
+ * latest.log más nuevo), para reportar el último error sin saber qué instancia falló.
+ */
 function pickLatestLog(): { file: string; name: string } | null {
-  const crashDir = path.join(GAME_ROOT, 'crash-reports')
-  const logsDir = path.join(GAME_ROOT, 'logs')
-  try {
-    const crashes = fs
-      .readdirSync(crashDir)
-      .filter((f) => f.endsWith('.txt'))
-      .map((f) => ({ f, t: fs.statSync(path.join(crashDir, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t)
-    if (crashes[0]) return { file: path.join(crashDir, crashes[0].f), name: crashes[0].f }
-  } catch {
-    /* sin crashes */
+  const candidates: { file: string; name: string; t: number }[] = []
+  const add = (file: string, name: string) => {
+    try {
+      candidates.push({ file, name, t: fs.statSync(file).mtimeMs })
+    } catch {
+      /* no existe */
+    }
   }
-  const latest = path.join(logsDir, 'latest.log')
-  if (fs.existsSync(latest)) return { file: latest, name: 'latest.log' }
-  return null
+  let dirs: string[] = []
+  try {
+    dirs = fs
+      .readdirSync(GAME_ROOT, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(GAME_ROOT, e.name))
+  } catch {
+    return null
+  }
+  for (const d of dirs) {
+    try {
+      for (const f of fs.readdirSync(path.join(d, 'crash-reports'))) {
+        if (f.endsWith('.txt')) add(path.join(d, 'crash-reports', f), f)
+      }
+    } catch {
+      /* sin crashes en esta instancia */
+    }
+    add(path.join(d, 'logs', 'latest.log'), 'latest.log')
+  }
+  if (candidates.length === 0) return null
+  const best = candidates.sort((a, b) => b.t - a.t)[0]
+  return { file: best.file, name: best.name }
 }
 
 /**
@@ -156,14 +209,23 @@ export async function uploadLog(): Promise<{ ok: boolean; url?: string; error?: 
   }
 }
 
-/** Abre en el explorador la carpeta de registros/crashes del juego. */
-export async function openGameLogs(): Promise<void> {
-  for (const dir of [path.join(GAME_ROOT, 'crash-reports'), path.join(GAME_ROOT, 'logs'), GAME_ROOT]) {
-    if (fs.existsSync(dir)) {
-      await shell.openPath(dir)
-      return
-    }
+/** ¿Hay un crash-report de esta instancia generado después de `since` (ms)? = crasheó. */
+function hasFreshCrash(instanceId: string, since: number): boolean {
+  const dir = path.join(instanceDir(instanceId), 'crash-reports')
+  try {
+    return fs
+      .readdirSync(dir)
+      .some((f) => f.endsWith('.txt') && fs.statSync(path.join(dir, f)).mtimeMs >= since - 3000)
+  } catch {
+    return false
   }
+}
+
+/** Abre en el explorador la carpeta del registro más reciente (o la raíz del juego). */
+export async function openGameLogs(): Promise<void> {
+  const pick = pickLatestLog()
+  const dir = pick ? path.dirname(pick.file) : GAME_ROOT
+  if (fs.existsSync(dir)) await shell.openPath(dir)
 }
 
 /** Estado del lanzamiento en curso, para poder cancelarlo desde fuera. */
@@ -193,6 +255,14 @@ interface LaunchOptions {
   onGameLaunched?: () => void
   /** Se llama cuando el juego se cierra (para restaurar el launcher). */
   onGameClosed?: () => void
+  /**
+   * Se llama si el lanzamiento terminó por una CANCELACIÓN. La descarga de
+   * eml-lib no se puede abortar a media, así que pudo dejar archivos a medias:
+   * el renderer ofrece limpiar la instancia.
+   */
+  onCancelled?: () => void
+  /** Se llama si el juego se cerró por un CRASH (código ≠ 0 o crash-report nuevo). */
+  onCrashed?: () => void
 }
 
 /**
@@ -210,8 +280,13 @@ export async function launchGame({
   onProgress,
   onGameLaunched,
   onGameClosed,
+  onCancelled,
+  onCrashed,
 }: LaunchOptions): Promise<void> {
   const { Launcher } = await import('eml-lib')
+
+  // Momento del lanzamiento, para detectar crash-reports nuevos al cerrarse.
+  const launchTime = Date.now()
 
   // Registra este lanzamiento como el activo (para poder cancelarlo).
   active = { cancelled: false, onProgress, onGameClosed }
@@ -222,7 +297,7 @@ export async function launchGame({
   // Auto-join: si está activado y la instancia define un servidor, arrancamos
   // con Quick Play (--quickPlayMultiplayer) para entrar directo. Si está
   // desactivado, el juego abre en el menú y el jugador conecta a mano (útil si
-  // usa otra ruta, p. ej. ZeroTier).
+  // usa otra ruta, p. ej. Tailscale).
   const gameArgs =
     autoJoin && instance.serverAddress
       ? ['--quickPlayMultiplayer', instance.serverAddress]
@@ -231,6 +306,9 @@ export async function launchGame({
   const launcher = new Launcher({
     root: 'tensoclient', // -> .tensoclient (oculto) en Windows
     storage: 'isolated',
+    // Cada instancia en su propia subcarpeta `.tensoclient/<slug>`: cambiar de
+    // tipo (HIGH/LOW) es instantáneo y la limpieza/reparación es por instancia.
+    profile: { slug: slugFor(instance.id) },
     account,
     minecraft: {
       version: instance.mcVersion,
@@ -313,14 +391,23 @@ export async function launchGame({
     onGameLaunched?.()
   })
   // El juego se ha cerrado: volvemos al estado inicial y restauramos el launcher.
-  launcher.on('launch_close', () => {
+  launcher.on('launch_close', (code) => {
     onProgress({ stage: 'idle', fraction: 0, label: '' })
     onGameClosed?.()
+    // Crash = código de salida ≠ 0 y, además, Minecraft dejó un crash-report
+    // nuevo. Si el jugador lo paró desde el launcher (cancelado), no es crash.
+    if (!active?.cancelled && code !== 0 && hasFreshCrash(instance.id, launchTime)) {
+      onCrashed?.()
+    }
   })
 
   try {
     await launcher.launch()
   } finally {
+    const wasCancelled = active?.cancelled ?? false
     active = null
+    // Si se canceló, la descarga de eml-lib pudo dejar archivos a medias:
+    // avisamos para ofrecer una limpieza de la instancia.
+    if (wasCancelled) onCancelled?.()
   }
 }

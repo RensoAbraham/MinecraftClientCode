@@ -15,8 +15,6 @@ interface SettingsProps {
  */
 export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsProps) {
   const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
-  const [reporting, setReporting] = useState(false)
-  const [report, setReport] = useState<{ ok: boolean; url?: string; error?: string } | null>(null)
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
   const [javaBusy, setJavaBusy] = useState(false)
   const [javaProg, setJavaProg] = useState<{ label: string; fraction: number } | null>(null)
@@ -40,18 +38,6 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
     } finally {
       setJavaBusy(false)
       setTimeout(() => setJavaProg(null), 1500)
-    }
-  }
-
-  async function handleReport() {
-    setReport(null)
-    setReporting(true)
-    try {
-      setReport(await window.tenso.uploadLog())
-    } catch (e) {
-      setReport({ ok: false, error: e instanceof Error ? e.message : String(e) })
-    } finally {
-      setReporting(false)
     }
   }
 
@@ -107,10 +93,6 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
             </button>
           </div>
         </div>
-
-        <p className="mt-3 text-xs text-tenso-muted">
-          La memoria RAM y el auto-join ahora se ajustan por instancia, en la <span className="text-tenso-text">tuerca al lado de JUGAR</span>.
-        </p>
 
         {/* Java, caché y guía */}
         <div className="mt-4 space-y-3">
@@ -182,50 +164,6 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
               >
                 {cacheState === 'clearing' ? 'Limpiando…' : cacheState === 'done' ? 'Listo ✓' : 'Limpiar caché'}
               </button>
-            </div>
-
-            {/* Reportar un error (sube el log a mclo.gs y da un enlace) */}
-            <div className="rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm">
-                  <span className="font-medium">Reportar un error</span>
-                  <span className="mt-0.5 block text-xs text-tenso-muted">
-                    Crea un enlace con el último error para enviárselo a Renso.
-                  </span>
-                </span>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => window.tenso.openGameLogs()}
-                    className="rounded-lg border border-tenso-border bg-tenso-panel px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
-                    title="Abrir la carpeta de registros"
-                  >
-                    Carpeta
-                  </button>
-                  <button
-                    onClick={handleReport}
-                    disabled={reporting}
-                    className="rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
-                  >
-                    {reporting ? 'Subiendo…' : 'Crear enlace'}
-                  </button>
-                </div>
-              </div>
-              {report?.ok && report.url && (
-                <div className="mt-2 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-300">
-                  Enlace creado (copiado al portapapeles):{' '}
-                  <button
-                    onClick={() => window.tenso.openExternal(report.url!)}
-                    className="font-semibold underline underline-offset-2"
-                  >
-                    {report.url}
-                  </button>
-                </div>
-              )}
-              {report && !report.ok && (
-                <p className="mt-2 rounded-lg bg-tenso-accent/10 px-3 py-2 text-xs text-tenso-accent-soft">
-                  No se pudo crear el enlace: {report.error}
-                </p>
-              )}
             </div>
 
             {/* Guía rápida */}

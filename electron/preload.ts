@@ -28,9 +28,11 @@ const api: TensoApi = {
   applyCape: (id) => ipcRenderer.invoke(IPC.applyCape, id),
   hideCape: () => ipcRenderer.invoke(IPC.hideCape),
   play: (instanceId, connection) => ipcRenderer.invoke(IPC.play, instanceId, connection),
+  tailscaleStatus: () => ipcRenderer.invoke(IPC.tailscaleStatus),
+  tailscaleConnect: (authKey) => ipcRenderer.invoke(IPC.tailscaleConnect, authKey),
   cancelPlay: () => ipcRenderer.invoke(IPC.cancelPlay),
-  repairInstance: () => ipcRenderer.invoke(IPC.repairInstance),
-  deepClean: () => ipcRenderer.invoke(IPC.deepClean),
+  repairInstance: (instanceId) => ipcRenderer.invoke(IPC.repairInstance, instanceId),
+  deepClean: (instanceId) => ipcRenderer.invoke(IPC.deepClean, instanceId),
   uploadLog: () => ipcRenderer.invoke(IPC.uploadLog),
   openGameLogs: () => ipcRenderer.invoke(IPC.openGameLogs),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
@@ -103,6 +105,21 @@ const api: TensoApi = {
     const listener = (_e: Electron.IpcRendererEvent, p: Progress) => cb(p)
     ipcRenderer.on(IPC.progress, listener)
     return () => ipcRenderer.off(IPC.progress, listener)
+  },
+  onCleanProgress: (cb: (p: { label: string; fraction: number }) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { label: string; fraction: number }) => cb(p)
+    ipcRenderer.on(IPC.cleanProgress, listener)
+    return () => ipcRenderer.off(IPC.cleanProgress, listener)
+  },
+  onInstallCancelled: (cb: (instanceId: string) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, instanceId: string) => cb(instanceId)
+    ipcRenderer.on(IPC.installCancelled, listener)
+    return () => ipcRenderer.off(IPC.installCancelled, listener)
+  },
+  onGameCrashed: (cb: (instanceId: string) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, instanceId: string) => cb(instanceId)
+    ipcRenderer.on(IPC.gameCrashed, listener)
+    return () => ipcRenderer.off(IPC.gameCrashed, listener)
   },
 }
 

@@ -45,13 +45,14 @@ const SAMPLE_VARIANTS: Instance[] = [
 
 const SAMPLE_CONNECTION = sampleInstance({
   serverAddress: 'demo.playit.gg:25565',
-  zerotierAddress: '10.147.20.5:25565',
+  tailscaleAddress: '100.125.113.105:25565',
+  tailscaleAuthKey: 'tskey-auth-ejemplo',
 })
 
 const ITEMS: { view: View; title: string; desc: string }[] = [
   { view: 'login', title: 'Inicio de sesión', desc: 'Pantalla de login con Microsoft.' },
   { view: 'variant', title: 'Elegir tipo (LOW/HIGH)', desc: 'Intro + cartillas de tipo de instancia.' },
-  { view: 'connection', title: 'Elegir conexión', desc: 'Cartillas PLAYIT / ZEROTIER.' },
+  { view: 'connection', title: 'Elegir conexión', desc: 'Cartillas PLAYIT / TAILSCALE.' },
   { view: 'guia', title: 'Guía rápida', desc: 'Bienvenida con pasos (Ir / Saltar).' },
 ]
 

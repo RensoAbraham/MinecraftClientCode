@@ -69,7 +69,8 @@ export function listGroups(): DevGroup[] {
             loader: m.loader ?? '',
             loaderVersion: m.loaderVersion ?? '',
             serverAddress: m.serverAddress ?? '',
-            zerotierAddress: m.zerotierAddress ?? '',
+            tailscaleAddress: m.tailscaleAddress ?? '',
+            tailscaleAuthKey: m.tailscaleAuthKey ?? '',
             description: m.description ?? '',
             version: m.version ?? '0.0.1',
             hasImage: fs.existsSync(path.join(instDir, 'icon.png')),
@@ -228,7 +229,8 @@ export function createInstance(groupId: string, meta: NewInstance): string {
         loader: meta.loader,
         loaderVersion: meta.loaderVersion,
         serverAddress: meta.serverAddress,
-        zerotierAddress: meta.zerotierAddress ?? '',
+        tailscaleAddress: meta.tailscaleAddress ?? '',
+        tailscaleAuthKey: meta.tailscaleAuthKey ?? '',
         description: meta.description ?? '',
         version: meta.version ?? '0.0.1',
         published: false,
@@ -248,7 +250,7 @@ export function updateInstance(
 ): void {
   const metaPath = path.join(modpackRoot(), groupId, instanceId, 'instance.json')
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
-  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'zerotierAddress', 'description', 'version'] as const) {
+  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'tailscaleAddress', 'tailscaleAuthKey', 'description', 'version'] as const) {
     if (patch[key] !== undefined) meta[key] = patch[key]
   }
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))

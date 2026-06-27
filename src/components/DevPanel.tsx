@@ -15,7 +15,8 @@ const EMPTY_FORM: NewInstance = {
   loader: 'neoforge',
   loaderVersion: '21.1.234',
   serverAddress: '',
-  zerotierAddress: '',
+  tailscaleAddress: '',
+  tailscaleAuthKey: '',
   description: '',
   version: '0.0.1',
 }
@@ -132,7 +133,8 @@ export function DevPanel({ onClose }: DevPanelProps) {
       loader: inst.loader as NewInstance['loader'],
       loaderVersion: inst.loaderVersion,
       serverAddress: inst.serverAddress,
-      zerotierAddress: inst.zerotierAddress,
+      tailscaleAddress: inst.tailscaleAddress,
+      tailscaleAuthKey: inst.tailscaleAuthKey,
       description: inst.description,
       version: inst.version,
     })
@@ -513,7 +515,8 @@ export function DevPanel({ onClose }: DevPanelProps) {
                           <input className={input} placeholder="Versión del loader" value={form.loaderVersion} onChange={(e) => setForm({ ...form, loaderVersion: e.target.value })} />
                         )}
                         <input className={`${input} col-span-2`} placeholder="Servidor PLAYIT (ej. xxx.playit.gg:25565)" value={form.serverAddress} onChange={(e) => setForm({ ...form, serverAddress: e.target.value })} />
-                        <input className={`${input} col-span-2`} placeholder="Servidor ZeroTier (ej. 10.147.x.x:25565, opcional)" value={form.zerotierAddress ?? ''} onChange={(e) => setForm({ ...form, zerotierAddress: e.target.value })} />
+                        <input className={`${input} col-span-2`} placeholder="Servidor Tailscale (ej. 100.x.x.x:25565, opcional)" value={form.tailscaleAddress ?? ''} onChange={(e) => setForm({ ...form, tailscaleAddress: e.target.value })} />
+                        <input className={`${input} col-span-2`} placeholder="Tailscale auth key (tskey-..., para modo automático, opcional)" value={form.tailscaleAuthKey ?? ''} onChange={(e) => setForm({ ...form, tailscaleAuthKey: e.target.value })} />
                         <input className={`${input} col-span-2`} placeholder="Requisitos / descripción (ej. Para PCs potentes, 8 GB RAM)" value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                         <button onClick={() => createInstance(g.id)} className="col-span-2 rounded-lg bg-tenso-accent py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft">
                           Crear instancia
@@ -598,7 +601,8 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                 </select>
                                 <input className={`${input} col-span-2`} placeholder="Versión del loader" value={editForm.loaderVersion ?? ''} onChange={(e) => setEditForm({ ...editForm, loaderVersion: e.target.value })} />
                                 <input className={`${input} col-span-2`} placeholder="Servidor PLAYIT (ej. xxx.playit.gg:25565)" value={editForm.serverAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, serverAddress: e.target.value })} />
-                                <input className={`${input} col-span-2`} placeholder="Servidor ZeroTier (ej. 10.147.x.x:25565, opcional)" value={editForm.zerotierAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, zerotierAddress: e.target.value })} />
+                                <input className={`${input} col-span-2`} placeholder="Servidor Tailscale (ej. 100.x.x.x:25565, opcional)" value={editForm.tailscaleAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, tailscaleAddress: e.target.value })} />
+                                <input className={`${input} col-span-2`} placeholder="Tailscale auth key (tskey-..., para modo automático, opcional)" value={editForm.tailscaleAuthKey ?? ''} onChange={(e) => setEditForm({ ...editForm, tailscaleAuthKey: e.target.value })} />
                                 <textarea className={`${input} col-span-2 resize-none`} rows={2} placeholder="Requisitos / descripción (ej. RAM recomendada: 6 GB)" value={editForm.description ?? ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
 
                                 <div className="col-span-2 flex flex-wrap items-center gap-2 border-t border-tenso-border pt-2">

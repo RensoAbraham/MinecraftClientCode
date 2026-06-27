@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net } from 'electron'
+import { app, BrowserWindow, protocol, net, Tray, Menu, nativeImage } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -24,6 +24,41 @@ const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+
+/** Ruta del icono para la bandeja (empaquetado: resources; dev: build/). */
+function trayIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(process.env.APP_ROOT as string, 'build', 'icon.png')
+}
+
+/** Crea el icono de la bandeja (al ocultar la ventana mientras se juega). Devuelve si pudo. */
+function createTray(): boolean {
+  if (tray) return true
+  try {
+    tray = new Tray(nativeImage.createFromPath(trayIconPath()))
+    tray.setToolTip('Paput Client (jugando)')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Abrir Paput Client', click: () => mainWindow?.show() },
+        { type: 'separator' },
+        { label: 'Salir', click: () => app.quit() },
+      ]),
+    )
+    tray.on('click', () => mainWindow?.show())
+    return true
+  } catch (e) {
+    console.error('No se pudo crear el icono de bandeja:', e)
+    tray = null
+    return false
+  }
+}
+
+function destroyTray(): void {
+  tray?.destroy()
+  tray = null
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -61,8 +96,16 @@ function createWindow() {
     mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
+  // Al jugar, la ventana se OCULTA (no a la barra de tareas) para ahorrar
+  // recursos, y aparece un icono en la bandeja. Al cerrar el juego, se restaura.
+  mainWindow.on('hide', () => {
+    if (!createTray()) mainWindow?.show() // si no hay bandeja, no la dejes perdida
+  })
+  mainWindow.on('show', destroyTray)
+
   mainWindow.on('closed', () => {
     mainWindow = null
+    destroyTray()
   })
 }
 

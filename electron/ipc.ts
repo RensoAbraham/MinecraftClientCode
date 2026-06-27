@@ -2,7 +2,14 @@ import { BrowserWindow, ipcMain, shell, session } from 'electron'
 import { IPC, type Progress } from '../shared/ipc'
 import * as instances from './services/instances'
 import * as auth from './services/auth'
-import { launchGame, cancelLaunch, repairInstance, deepClean, uploadLog, openGameLogs } from './services/game'
+import {
+  launchGame,
+  cancelLaunch,
+  repairInstance,
+  deepClean,
+  uploadLog,
+  openGameLogs,
+} from './services/game'
 import {
   getSettings,
   setSettings,
@@ -13,6 +20,7 @@ import {
 import * as dev from './services/dev'
 import * as r2 from './services/r2'
 import { getLoaderVersions } from './services/loaders'
+import * as tailscale from './services/tailscale'
 import * as skin from './services/skin'
 import { checkJava, installJava } from './services/java'
 import { checkForUpdate, downloadUpdate, quitAndInstall } from './services/updater'
@@ -163,18 +171,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
 
   // --- Jugar (Fase 3) ------------------------------------------------------
   // Sincronización del modpack (Fase 5) -> descarga/lanzamiento (Fase 3).
-  ipcMain.handle(IPC.play, async (_e, instanceId: string, connection?: 'playit' | 'zerotier') => {
+  ipcMain.handle(IPC.play, async (_e, instanceId: string, connection?: 'playit' | 'tailscale') => {
     const instance = instances.getInstance(instanceId)
     if (!instance) throw new Error('No se encontró la instancia.')
     const account = auth.getStoredAccount()
     if (!account) throw new Error('No has iniciado sesión.')
 
     // Resuelve la dirección del servidor según la conexión elegida por el
-    // jugador (PLAYIT por defecto; ZeroTier si la pidió y está configurada).
+    // jugador (PLAYIT por defecto; Tailscale si la pidió y está configurada).
     const serverAddress =
-      connection === 'zerotier' && instance.zerotierAddress
-        ? instance.zerotierAddress
+      connection === 'tailscale' && instance.tailscaleAddress
+        ? instance.tailscaleAddress
         : instance.serverAddress
+
 
     try {
       const { maxRamMb, autoJoin } = getInstanceSettings(instanceId)
@@ -184,13 +193,22 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
         maxRamMb,
         autoJoin,
         onProgress: emitProgress,
-        // Minimiza el launcher al abrir el juego y lo restaura al cerrarlo.
-        onGameLaunched: () => getWindow()?.minimize(),
+        // Al abrir el juego, OCULTA el launcher a la bandeja (ahorra recursos);
+        // al cerrarse, lo restaura.
+        onGameLaunched: () => getWindow()?.hide(),
         onGameClosed: () => {
           const win = getWindow()
-          win?.restore()
+          win?.show()
           win?.focus()
         },
+        // Si se canceló a media, avisa al renderer (para ofrecer limpiar).
+        onCancelled: () => {
+          const win = getWindow()
+          win?.show()
+          win?.webContents.send(IPC.installCancelled, instanceId)
+        },
+        // Si el juego crasheó, avisa al renderer (para ofrecer reportar).
+        onCrashed: () => getWindow()?.webContents.send(IPC.gameCrashed, instanceId),
       })
     } catch (err) {
       console.error('[play] error:', err)
@@ -201,11 +219,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.cancelPlay, () => {
     cancelLaunch()
     const win = getWindow()
-    win?.restore()
+    win?.show()
     win?.focus()
   })
-  ipcMain.handle(IPC.repairInstance, () => repairInstance())
-  ipcMain.handle(IPC.deepClean, () => deepClean())
+  ipcMain.handle(IPC.tailscaleStatus, () => tailscale.status())
+  ipcMain.handle(IPC.tailscaleConnect, (_e, authKey: string) => tailscale.connect(authKey))
+  const emitClean = (p: { label: string; fraction: number }) =>
+    getWindow()?.webContents.send(IPC.cleanProgress, p)
+  ipcMain.handle(IPC.repairInstance, (_e, instanceId: string) => repairInstance(instanceId, emitClean))
+  ipcMain.handle(IPC.deepClean, (_e, instanceId: string) => deepClean(instanceId, emitClean))
   ipcMain.handle(IPC.uploadLog, () => uploadLog())
   ipcMain.handle(IPC.openGameLogs, () => openGameLogs())
 }

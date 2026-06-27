@@ -35,7 +35,7 @@ export interface Group {
 function connectionOptions(inst: Instance): ConnectionKind[] {
   const opts: ConnectionKind[] = []
   if (inst.serverAddress) opts.push('playit')
-  if (inst.zerotierAddress) opts.push('zerotier')
+  if (inst.tailscaleAddress) opts.push('tailscale')
   return opts
 }
 
@@ -82,7 +82,7 @@ export default function App() {
     }
   })
 
-  // Método de conexión elegido por grupo (PLAYIT/ZEROTIER), recordado en disco.
+  // Método de conexión elegido por grupo (PLAYIT/TAILSCALE), recordado en disco.
   const [connections, setConnections] = useState<Record<string, ConnectionKind>>(() => {
     try {
       return JSON.parse(localStorage.getItem(CONNECTIONS_KEY) ?? '{}')
@@ -217,7 +217,7 @@ export default function App() {
     !!selectedGroup && selectedGroup.instances.length > 1 && (!activeInstance || changingVariant)
 
   // Tras tener instancia activa: si ofrece varias conexiones y aún no se eligió
-  // (o se está cambiando), pedimos elegir PLAYIT/ZEROTIER con las cartillas.
+  // (o se está cambiando), pedimos elegir PLAYIT/TAILSCALE con las cartillas.
   const connOptions = activeInstance ? connectionOptions(activeInstance) : []
   const chosenConnection = selectedGroup ? connections[selectedGroup.groupId] : undefined
   const activeConnection: ConnectionKind | undefined =

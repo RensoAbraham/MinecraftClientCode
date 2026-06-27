@@ -30,6 +30,12 @@
       "dist-electron/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
     "asar": true,
     "asarUnpack": [
       "node_modules/**"

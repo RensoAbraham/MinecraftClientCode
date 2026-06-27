@@ -23,6 +23,8 @@ interface PublishedInstance {
   loader: Instance['loader']
   loaderVersion: string
   serverAddress: string
+  tailscaleAddress?: string
+  tailscaleAuthKey?: string
   version?: string
   imageUrl?: string
   backgroundUrl?: string
@@ -130,6 +132,8 @@ async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
     loader: meta.loader,
     loaderVersion: meta.loaderVersion,
     serverAddress: meta.serverAddress,
+    tailscaleAddress: meta.tailscaleAddress,
+    tailscaleAuthKey: meta.tailscaleAuthKey,
     version: meta.version,
     imageUrl: meta.imageUrl,
     backgroundUrl: meta.backgroundUrl,

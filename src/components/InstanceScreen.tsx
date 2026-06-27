@@ -4,7 +4,7 @@ import { useProgress } from '../hooks/useProgress'
 
 interface InstanceScreenProps {
   instance: Instance
-  /** Conexión elegida (PLAYIT/ZEROTIER) con la que lanzar el juego. */
+  /** Conexión elegida (PLAYIT/TAILSCALE) con la que lanzar el juego. */
   connection?: ConnectionKind
   /** Si el grupo tiene varios tipos, permite volver a elegir. */
   onChangeVariant?: () => void
@@ -27,11 +27,21 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bgFailed, setBgFailed] = useState(false)
-  const [paused, setPaused] = useState(false)
-  const [volume, setVolume] = useState(0.4)
+  const [paused, setPaused] = useState(() => localStorage.getItem('paput.bgPaused') === '1')
+  const [volume, setVolume] = useState(() => {
+    const v = localStorage.getItem('paput.bgVolume')
+    return v != null ? Number(v) : 0.4
+  })
   const [confirmRepair, setConfirmRepair] = useState(false)
   const [confirmDeep, setConfirmDeep] = useState(false)
+  const [cancelCleanup, setCancelCleanup] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportCrashed, setReportCrashed] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [reportUrl, setReportUrl] = useState<string | null>(null)
+  const [reportErr, setReportErr] = useState<string | null>(null)
   const [repairing, setRepairing] = useState(false)
+  const [cleanProg, setCleanProg] = useState<{ label: string; fraction: number } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [showCustomize, setShowCustomize] = useState(false)
   const [customizing, setCustomizing] = useState(false)
@@ -56,20 +66,61 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
     setBgFailed(false)
   }, [instance.backgroundUrl])
 
-  // Aplica el volumen (mudo si es 0) al fondo en vídeo.
+  // Progreso de la limpieza/reparación (barra).
+  useEffect(() => window.tenso.onCleanProgress(setCleanProg), [])
+
+  // Aviso de instalación cancelada a media → ofrecer limpiar (solo esta instancia).
+  useEffect(
+    () => window.tenso.onInstallCancelled((id) => { if (id === instance.id) setCancelCleanup(true) }),
+    [instance.id],
+  )
+
+  // El juego crasheó → ofrecer reportar el error (solo esta instancia).
+  useEffect(
+    () =>
+      window.tenso.onGameCrashed((id) => {
+        if (id !== instance.id) return
+        setReportUrl(null)
+        setReportErr(null)
+        setReportCrashed(true)
+        setReportOpen(true)
+      }),
+    [instance.id],
+  )
+
+  async function handleReport() {
+    setReporting(true)
+    setReportUrl(null)
+    setReportErr(null)
+    try {
+      const r = await window.tenso.uploadLog()
+      if (r.ok && r.url) setReportUrl(r.url)
+      else setReportErr(r.error ?? 'No se pudo crear el enlace.')
+    } catch (e) {
+      setReportErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setReporting(false)
+    }
+  }
+
+  // Aplica el volumen (mudo si es 0) al fondo en vídeo, y recuerda la preferencia.
   useEffect(() => {
     const v = videoRef.current
-    if (!v) return
-    v.volume = volume
-    v.muted = volume === 0
+    if (v) {
+      v.volume = volume
+      v.muted = volume === 0
+    }
+    localStorage.setItem('paput.bgVolume', String(volume))
   }, [volume])
 
-  // Pausa / reanuda el vídeo de fondo.
+  // Pausa / reanuda el vídeo de fondo, y recuerda la preferencia.
   useEffect(() => {
     const v = videoRef.current
-    if (!v) return
-    if (paused) v.pause()
-    else v.play().catch(() => {})
+    if (v) {
+      if (paused) v.pause()
+      else v.play().catch(() => {})
+    }
+    localStorage.setItem('paput.bgPaused', paused ? '1' : '0')
   }, [paused])
 
   const isWorking = busy && progress.stage !== 'idle' && progress.stage !== 'running'
@@ -115,13 +166,14 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
     setRepairing(true)
     setNotice(null)
     try {
-      await window.tenso.repairInstance()
+      await window.tenso.repairInstance(instance.id)
       setNotice('Instancia reparada. Pulsa JUGAR para volver a descargar los archivos.')
       setTimeout(() => setNotice(null), 5000)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRepairing(false)
+      setCleanProg(null)
     }
   }
 
@@ -130,13 +182,14 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
     setRepairing(true)
     setNotice(null)
     try {
-      await window.tenso.deepClean()
+      await window.tenso.deepClean(instance.id)
       setNotice('Limpieza profunda completa. Pulsa JUGAR para reinstalar desde cero (tardará más).')
       setTimeout(() => setNotice(null), 7000)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRepairing(false)
+      setCleanProg(null)
     }
   }
 
@@ -214,6 +267,30 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
           <div className="text-5xl font-light tracking-[0.3em] text-tenso-muted">CLIENT</div>
         </div>
       </div>
+
+      {/* Progreso de limpieza/reparación */}
+      {repairing && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl">
+            <div className="mb-2 flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="anim-spin text-tenso-accent-soft" aria-hidden>
+                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+              </svg>
+              <span className="text-sm font-medium">Limpiando archivos…</span>
+            </div>
+            <div className="mb-1.5 flex justify-between text-xs text-tenso-muted">
+              <span className="anim-pulse truncate">{cleanProg?.label ?? 'Preparando…'}</span>
+              {cleanProg && cleanProg.fraction >= 0 && <span>{Math.round(cleanProg.fraction * 100)}%</span>}
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-tenso-panel-2">
+              <div
+                className={`h-full rounded-full bg-tenso-accent transition-[width] duration-200 ${!cleanProg || cleanProg.fraction < 0 ? 'anim-pulse w-1/3' : ''}`}
+                style={cleanProg && cleanProg.fraction >= 0 ? { width: `${cleanProg.fraction * 100}%` } : undefined}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Aviso de reparación / limpieza completada */}
       {notice && (
@@ -424,12 +501,108 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
               Limpieza profunda (reinstalar desde cero)
             </button>
 
+            {/* Reportar un error */}
+            <button
+              onClick={() => { setShowOpts(false); setReportCrashed(false); setReportUrl(null); setReportErr(null); setReportOpen(true) }}
+              className="mt-2 w-full rounded-xl border border-tenso-border bg-tenso-panel-2 py-2 text-xs text-tenso-muted hover:border-tenso-accent hover:text-tenso-accent-soft"
+            >
+              Reportar un error
+            </button>
+
             <div className="mt-5 flex justify-end">
               <button
                 onClick={() => setShowOpts(false)}
                 className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reportar error (crash automático o manual) */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setReportOpen(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold">
+              {reportCrashed ? 'Ups… el juego se cerró por un error' : 'Reportar un error'}
+            </h2>
+            <p className="mt-2 text-sm text-tenso-muted">
+              {reportCrashed
+                ? 'Parece que el juego crasheó. ¿Compartes el reporte con Renso? Se crea un enlace con los detalles para que lo revise.'
+                : 'Crea un enlace con el último error del juego para enviárselo a Renso.'}
+            </p>
+
+            {reportUrl ? (
+              <div className="mt-4 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-300">
+                Enlace creado (copiado al portapapeles):{' '}
+                <button
+                  onClick={() => window.tenso.openExternal(reportUrl)}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  {reportUrl}
+                </button>
+              </div>
+            ) : reportErr ? (
+              <p className="mt-4 rounded-lg bg-tenso-accent/10 px-3 py-2 text-xs text-tenso-accent-soft">{reportErr}</p>
+            ) : null}
+
+            <div className="mt-5 flex justify-between gap-2">
+              <button
+                onClick={() => window.tenso.openGameLogs()}
+                className="rounded-xl border border-tenso-border px-3 py-2 text-xs text-tenso-muted hover:text-tenso-text"
+              >
+                Abrir carpeta
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setReportOpen(false)}
+                  className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={handleReport}
+                  disabled={reporting}
+                  className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                >
+                  {reporting ? 'Subiendo…' : reportUrl ? 'Crear de nuevo' : 'Crear enlace'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso tras cancelar una instalación a media */}
+      {cancelCleanup && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setCancelCleanup(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold">Instalación cancelada</h2>
+            <p className="mt-2 text-sm text-tenso-muted">
+              Cancelaste la instalación, pero la descarga ya en curso no se puede detener al instante y
+              pudo dejar <span className="text-tenso-text">archivos a medias</span>. ¿Quieres limpiar la
+              instancia para que la próxima instalación empiece limpia?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setCancelCleanup(false)}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+              >
+                Ahora no
+              </button>
+              <button
+                onClick={() => { setCancelCleanup(false); handleRepair() }}
+                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
+              >
+                Limpiar
               </button>
             </div>
           </div>
@@ -479,13 +652,14 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
           >
             <h2 className="text-lg font-bold">Limpieza profunda</h2>
             <p className="mt-2 text-sm text-tenso-muted">
-              Borra <span className="font-semibold text-tenso-text">todo lo descargado</span> del juego
-              (Java, recursos, mods, versiones, caché…) y conserva solo tus <span className="font-semibold text-tenso-text">mundos</span> y tus
-              <span className="font-semibold text-tenso-text"> ajustes</span>. Úsalo si quedó mal instalado o vas a cambiar de versión.
-              Al siguiente JUGAR se descarga todo de nuevo (tardará bastante más).
+              Borra <span className="font-semibold text-tenso-text">todo lo descargado</span> de
+              <span className="font-semibold text-tenso-text"> {instance.name}</span> (Java, recursos, mods,
+              versiones, caché…) y conserva solo tus <span className="font-semibold text-tenso-text">mundos</span> y
+              <span className="font-semibold text-tenso-text"> ajustes</span>. Úsalo si quedó mal instalada o vas a
+              cambiar de versión. Al siguiente JUGAR se descarga de nuevo (tardará más).
             </p>
             <p className="mt-2 text-xs text-tenso-muted">
-              Afecta a la instalación entera (las instancias comparten los archivos del juego).
+              Solo afecta a esta instancia; las demás no se tocan.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -547,8 +721,6 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </div>
               ) : error ? (
                 <span className="text-sm break-words text-tenso-accent-soft">{error}</span>
-              ) : progress.stage === 'running' ? (
-                <span className="text-sm font-medium text-green-400">Jugando</span>
               ) : null}
             </div>
 

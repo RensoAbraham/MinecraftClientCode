@@ -11,7 +11,7 @@ export type LaunchStage =
   | 'error'
 
 /** Método de conexión al servidor que elige el jugador. */
-export type ConnectionKind = 'playit' | 'zerotier'
+export type ConnectionKind = 'playit' | 'tailscale'
 
 /** Progreso reportado por el motor de sincronización / descargas. */
 export interface Progress {
@@ -34,8 +34,10 @@ export interface Instance {
   loader: 'neoforge' | 'forge' | 'fabric' | 'quilt' | 'vanilla'
   loaderVersion: string
   serverAddress: string // dirección PLAYIT (ip:puerto) para quickPlay
-  /** Dirección alternativa por ZeroTier (ip:puerto). Si existe, se ofrece como cartilla. */
-  zerotierAddress?: string
+  /** Dirección por Tailscale (ip 100.x:puerto). Si existe, se ofrece como cartilla. */
+  tailscaleAddress?: string
+  /** Auth key de Tailscale (para el modo automático). Solo si el dev la configuró. */
+  tailscaleAuthKey?: string
   /** Versión del contenido de la instancia (la pone el dev, p. ej. "0.0.6"). */
   version?: string
   imageUrl?: string
@@ -92,8 +94,10 @@ export interface DevInstance {
   loader: string
   loaderVersion: string
   serverAddress: string
-  /** Dirección por ZeroTier (ip:puerto), opcional. */
-  zerotierAddress: string
+  /** Dirección por Tailscale (ip 100.x:puerto), opcional. */
+  tailscaleAddress: string
+  /** Auth key de Tailscale (modo automático), opcional. */
+  tailscaleAuthKey: string
   description: string
   /** Versión del contenido de la instancia (diferenciador, p. ej. "0.0.6"). */
   version: string
@@ -112,7 +116,8 @@ export interface InstancePatch {
   loader?: Instance['loader']
   loaderVersion?: string
   serverAddress?: string
-  zerotierAddress?: string
+  tailscaleAddress?: string
+  tailscaleAuthKey?: string
   description?: string
   version?: string
 }
@@ -146,8 +151,10 @@ export interface NewInstance {
   loader: Instance['loader']
   loaderVersion: string
   serverAddress: string
-  /** Dirección por ZeroTier (ip:puerto), opcional. */
-  zerotierAddress?: string
+  /** Dirección por Tailscale (ip 100.x:puerto), opcional. */
+  tailscaleAddress?: string
+  /** Auth key de Tailscale (modo automático), opcional. */
+  tailscaleAuthKey?: string
   /** Descripción / requisitos recomendados (opcional). */
   description?: string
   /** Versión del contenido (diferenciador, p. ej. "0.0.1"). */
@@ -251,21 +258,28 @@ export interface TensoApi {
   hideCape(): Promise<void>
   /**
    * Sincroniza + lanza el juego (de la instancia indicada) conectando al
-   * servidor. `connection` elige qué dirección usar (PLAYIT o ZeroTier).
+   * servidor. `connection` elige qué dirección usar (PLAYIT o Tailscale).
    */
   play(instanceId: string, connection?: ConnectionKind): Promise<void>
+  /** Estado de Tailscale en este equipo (instalado / conectado). */
+  tailscaleStatus(): Promise<{ installed: boolean; connected: boolean }>
+  /**
+   * Conexión automática a Tailscale: instala Tailscale con winget si falta y
+   * ejecuta `tailscale up` con la auth key. Requiere confirmación (UAC).
+   */
+  tailscaleConnect(authKey: string): Promise<{ ok: boolean; message: string }>
   /** Cancela la preparación/lanzamiento en curso y cierra el juego si está abierto. */
   cancelPlay(): Promise<void>
   /**
    * Repara la instalación: borra mods/configs/librerías/versiones para forzar
    * una descarga limpia en el siguiente JUGAR (conserva Java y los assets).
    */
-  repairInstance(): Promise<void>
+  repairInstance(instanceId: string): Promise<void>
   /**
-   * Limpieza profunda: borra TODO lo descargado del juego (Java, recursos, mods,
-   * versiones, caché…) y conserva solo tus mundos y ajustes. Reinstala desde cero.
+   * Limpieza profunda de una instancia: borra TODO lo descargado de esa instancia
+   * (Java, recursos, mods, versiones, caché…) y conserva solo sus mundos y ajustes.
    */
-  deepClean(): Promise<void>
+  deepClean(instanceId: string): Promise<void>
   /**
    * Sube el último error del juego (crash o log) a mclo.gs y devuelve un enlace
    * corto para compartir. También copia el enlace al portapapeles.
@@ -275,6 +289,15 @@ export interface TensoApi {
   openGameLogs(): Promise<void>
   /** Suscribe a eventos de progreso. Devuelve la función para desuscribir. */
   onProgress(cb: (p: Progress) => void): () => void
+  /** Suscribe al progreso de la limpieza/reparación. Devuelve desuscripción. */
+  onCleanProgress(cb: (p: { label: string; fraction: number }) => void): () => void
+  /**
+   * Suscribe al aviso de que una instalación se canceló (a media). Trae el
+   * instanceId afectado para ofrecer limpiar. Devuelve desuscripción.
+   */
+  onInstallCancelled(cb: (instanceId: string) => void): () => void
+  /** Suscribe al aviso de que el juego se cerró por un crash. Devuelve desuscripción. */
+  onGameCrashed(cb: (instanceId: string) => void): () => void
   /** Devuelve los ajustes actuales junto a la RAM total del sistema (MB). */
   getSettings(): Promise<Settings & { systemRamMb: number }>
   /** Actualiza ajustes (parcial). */
@@ -392,6 +415,8 @@ export const IPC = {
   hideCape: 'tenso:hideCape',
   play: 'tenso:play',
   cancelPlay: 'tenso:cancelPlay',
+  tailscaleStatus: 'tenso:tailscaleStatus',
+  tailscaleConnect: 'tenso:tailscaleConnect',
   repairInstance: 'tenso:repairInstance',
   deepClean: 'tenso:deepClean',
   uploadLog: 'tenso:uploadLog',
@@ -436,4 +461,7 @@ export const IPC = {
   getR2Config: 'tenso:getR2Config',
   setR2Config: 'tenso:setR2Config',
   progress: 'tenso:progress', // canal de eventos (send)
+  cleanProgress: 'tenso:cleanProgress', // canal de eventos (send)
+  installCancelled: 'tenso:installCancelled', // canal de eventos (send)
+  gameCrashed: 'tenso:gameCrashed', // canal de eventos (send)
 } as const
