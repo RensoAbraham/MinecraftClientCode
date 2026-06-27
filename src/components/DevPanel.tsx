@@ -50,7 +50,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
   const [editForm, setEditForm] = useState<InstancePatch>({})
   // Panel de mods abierto: { groupId, instanceId } + lista.
   const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
-  const [mods, setMods] = useState<{ name: string; enabled: boolean }[]>([])
+  const [mods, setMods] = useState<{ name: string; enabled: boolean; bytes: number }[]>([])
   const [modFilter, setModFilter] = useState('')
   const [pullMsg, setPullMsg] = useState<string | null>(null)
 
@@ -629,7 +629,10 @@ export function DevPanel({ onClose }: DevPanelProps) {
                               <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
                                 <div className="mb-2 flex items-center justify-between gap-2">
                                   <p className="text-xs font-semibold text-tenso-muted">
-                                    Mods de esta instancia ({mods.length})
+                                    Mods ({mods.length}) ·{' '}
+                                    <span className="text-tenso-accent-soft">
+                                      {Math.round(mods.filter((m) => m.enabled).reduce((a, m) => a + m.bytes, 0) / 1024 / 1024)} MB activos
+                                    </span>
                                   </p>
                                   {mods.length > 0 && (
                                     <input
@@ -656,10 +659,13 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                             type="checkbox"
                                             checked={m.enabled}
                                             onChange={(e) => toggleMod(m.name, e.target.checked)}
-                                            className="h-4 w-4 accent-tenso-accent"
+                                            className="h-4 w-4 shrink-0 accent-tenso-accent"
                                           />
-                                          <span className={m.enabled ? 'truncate text-tenso-text' : 'truncate text-tenso-muted line-through'}>
+                                          <span className={`flex-1 truncate ${m.enabled ? 'text-tenso-text' : 'text-tenso-muted line-through'}`}>
                                             {m.name}
+                                          </span>
+                                          <span className="shrink-0 text-[11px] text-tenso-muted">
+                                            {m.bytes >= 1024 * 1024 ? `${Math.round(m.bytes / 1024 / 1024)} MB` : `${Math.round(m.bytes / 1024)} KB`}
                                           </span>
                                         </label>
                                       ))}

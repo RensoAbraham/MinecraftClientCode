@@ -287,6 +287,8 @@ export interface TensoApi {
   uploadLog(): Promise<{ ok: boolean; url?: string; error?: string }>
   /** Abre en el explorador la carpeta de registros/crashes del juego. */
   openGameLogs(): Promise<void>
+  /** Uso de espacio: tamaño (bytes) de cada carpeta del juego y el total. */
+  storageUsage(): Promise<{ total: number; items: { name: string; bytes: number }[] }>
   /** Suscribe a eventos de progreso. Devuelve la función para desuscribir. */
   onProgress(cb: (p: Progress) => void): () => void
   /** Suscribe al progreso de la limpieza/reparación. Devuelve desuscripción. */
@@ -372,8 +374,8 @@ export interface TensoApi {
   onDevImportProgress(cb: (p: { label: string; fraction: number }) => void): () => void
   /** Abre la carpeta de la instancia en el explorador (para arrastrar mods). */
   devOpenFolder(groupId: string, instanceId: string): Promise<void>
-  /** Lista los mods de una instancia con su estado (activado/desactivado). */
-  devListMods(groupId: string, instanceId: string): Promise<{ name: string; enabled: boolean }[]>
+  /** Lista los mods de una instancia con su estado (activado/desactivado) y peso (bytes). */
+  devListMods(groupId: string, instanceId: string): Promise<{ name: string; enabled: boolean; bytes: number }[]>
   /** Activa/desactiva un mod (renombra .jar <-> .jar.disabled, sin borrarlo). */
   devSetModEnabled(groupId: string, instanceId: string, name: string, enabled: boolean): Promise<void>
   /**
@@ -421,6 +423,7 @@ export const IPC = {
   deepClean: 'tenso:deepClean',
   uploadLog: 'tenso:uploadLog',
   openGameLogs: 'tenso:openGameLogs',
+  storageUsage: 'tenso:storageUsage',
   getSettings: 'tenso:getSettings',
   setSettings: 'tenso:setSettings',
   getInstanceSettings: 'tenso:getInstanceSettings',

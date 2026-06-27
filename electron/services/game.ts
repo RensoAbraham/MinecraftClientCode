@@ -209,6 +209,54 @@ export async function uploadLog(): Promise<{ ok: boolean; url?: string; error?: 
   }
 }
 
+/** Tamaño total (bytes) de una carpeta, sumando sus archivos recursivamente. */
+function dirSize(p: string): number {
+  let n = 0
+  try {
+    for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+      const fp = path.join(p, e.name)
+      if (e.isDirectory()) n += dirSize(fp)
+      else
+        try {
+          n += fs.statSync(fp).size
+        } catch {
+          /* archivo desaparecido */
+        }
+    }
+  } catch {
+    /* carpeta inaccesible */
+  }
+  return n
+}
+
+/**
+ * Uso de espacio del juego: tamaño (bytes) de cada carpeta de primer nivel en
+ * `.tensoclient` (instancias y datos compartidos) y el total. Para el apartado
+ * "Espacio" de Ajustes.
+ */
+export function storageUsage(): { total: number; items: { name: string; bytes: number }[] } {
+  const items: { name: string; bytes: number }[] = []
+  try {
+    for (const e of fs.readdirSync(GAME_ROOT, { withFileTypes: true })) {
+      const fp = path.join(GAME_ROOT, e.name)
+      const bytes = e.isDirectory()
+        ? dirSize(fp)
+        : (() => {
+            try {
+              return fs.statSync(fp).size
+            } catch {
+              return 0
+            }
+          })()
+      items.push({ name: e.name, bytes })
+    }
+  } catch {
+    /* no existe .tensoclient */
+  }
+  items.sort((a, b) => b.bytes - a.bytes)
+  return { total: items.reduce((a, i) => a + i.bytes, 0), items }
+}
+
 /** ¿Hay un crash-report de esta instancia generado después de `since` (ms)? = crasheó. */
 function hasFreshCrash(instanceId: string, since: number): boolean {
   const dir = path.join(instanceDir(instanceId), 'crash-reports')

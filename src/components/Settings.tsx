@@ -15,6 +15,8 @@ interface SettingsProps {
  */
 export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsProps) {
   const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
+  const [storage, setStorage] = useState<{ total: number; items: { name: string; bytes: number }[] } | null>(null)
+  const [loadingStorage, setLoadingStorage] = useState(false)
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
   const [javaBusy, setJavaBusy] = useState(false)
   const [javaProg, setJavaProg] = useState<{ label: string; fraction: number } | null>(null)
@@ -40,6 +42,20 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
       setTimeout(() => setJavaProg(null), 1500)
     }
   }
+
+  async function loadStorage() {
+    setLoadingStorage(true)
+    try {
+      setStorage(await window.tenso.storageUsage())
+    } finally {
+      setLoadingStorage(false)
+    }
+  }
+
+  const fmt = (bytes: number) =>
+    bytes >= 1024 * 1024 * 1024
+      ? `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+      : `${Math.round(bytes / 1024 / 1024)} MB`
 
   async function handleClearCache() {
     setCacheState('clearing')
@@ -92,6 +108,39 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
               <SunIcon /> Claro
             </button>
           </div>
+        </div>
+
+        {/* --- Espacio --- */}
+        <div className="mt-4 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Espacio en disco</span>
+            <button
+              onClick={loadStorage}
+              disabled={loadingStorage}
+              className="rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text disabled:opacity-60"
+            >
+              {loadingStorage ? 'Calculando…' : storage ? 'Recalcular' : 'Ver uso'}
+            </button>
+          </div>
+          {storage && (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex justify-between text-sm font-semibold">
+                <span>Total</span>
+                <span className="text-tenso-accent-soft">{fmt(storage.total)}</span>
+              </div>
+              <div className="mt-1 border-t border-tenso-border pt-1.5" />
+              {storage.items.map((it) => (
+                <div key={it.name} className="flex justify-between text-xs text-tenso-muted">
+                  <span className="truncate">{it.name}</span>
+                  <span className="shrink-0">{fmt(it.bytes)}</span>
+                </div>
+              ))}
+              <p className="mt-2 text-[11px] text-tenso-muted">
+                Cada instancia tiene su carpeta propia. Para liberar espacio, usa "Limpieza profunda"
+                en la tuerca de la instancia que no uses.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Java, caché y guía */}

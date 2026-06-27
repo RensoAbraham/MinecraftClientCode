@@ -9,6 +9,7 @@ import {
   deepClean,
   uploadLog,
   openGameLogs,
+  storageUsage,
 } from './services/game'
 import {
   getSettings,
@@ -230,4 +231,5 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.deepClean, (_e, instanceId: string) => deepClean(instanceId, emitClean))
   ipcMain.handle(IPC.uploadLog, () => uploadLog())
   ipcMain.handle(IPC.openGameLogs, () => openGameLogs())
+  ipcMain.handle(IPC.storageUsage, () => storageUsage())
 }

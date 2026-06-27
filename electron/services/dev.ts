@@ -120,8 +120,11 @@ function gameRootDir(): string {
   return path.join(appData, '.tensoclient')
 }
 
-/** Lista los mods de una instancia con su estado (activado / desactivado). */
-export function listMods(groupId: string, instanceId: string): { name: string; enabled: boolean }[] {
+/** Lista los mods de una instancia con su estado (activado / desactivado) y peso. */
+export function listMods(
+  groupId: string,
+  instanceId: string,
+): { name: string; enabled: boolean; bytes: number }[] {
   const modsDir = path.join(modpackRoot(), groupId, instanceId, 'mods')
   let files: string[] = []
   try {
@@ -131,11 +134,20 @@ export function listMods(groupId: string, instanceId: string): { name: string; e
   }
   return files
     .filter((f) => f.endsWith('.jar') || f.endsWith('.jar.disabled'))
-    .map((f) => ({
-      name: f.endsWith('.disabled') ? f.slice(0, -'.disabled'.length) : f,
-      enabled: !f.endsWith('.disabled'),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((f) => {
+      let bytes = 0
+      try {
+        bytes = fs.statSync(path.join(modsDir, f)).size
+      } catch {
+        /* ignora */
+      }
+      return {
+        name: f.endsWith('.disabled') ? f.slice(0, -'.disabled'.length) : f,
+        enabled: !f.endsWith('.disabled'),
+        bytes,
+      }
+    })
+    .sort((a, b) => b.bytes - a.bytes) // de mayor a menor peso: los pesados arriba
 }
 
 /** Activa/desactiva un mod renombrando .jar <-> .jar.disabled (no lo borra). */

@@ -35,6 +35,7 @@ const api: TensoApi = {
   deepClean: (instanceId) => ipcRenderer.invoke(IPC.deepClean, instanceId),
   uploadLog: () => ipcRenderer.invoke(IPC.uploadLog),
   openGameLogs: () => ipcRenderer.invoke(IPC.openGameLogs),
+  storageUsage: () => ipcRenderer.invoke(IPC.storageUsage),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   getInstanceSettings: (instanceId) => ipcRenderer.invoke(IPC.getInstanceSettings, instanceId),

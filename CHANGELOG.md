@@ -1,5 +1,11 @@
 # Cambios de Paput Client
 
+## 1.0.20
+
+### Nuevo
+- Apartado **"Espacio"** en Ajustes: muestra cuánto ocupa cada instancia y el total en disco.
+- En el **Panel Dev**, la lista de mods muestra el **peso de cada mod** (de mayor a menor) y el total de "MB activos", para ver fácil cuáles desactivar y aligerar una instancia.
+
 ## 1.0.19
 
 ### Arreglado
