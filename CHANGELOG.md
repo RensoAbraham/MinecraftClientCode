@@ -2,19 +2,19 @@
 
 ## 1.0.18
 
-### ✨ Nuevo
+### Nuevo
 - **Carpetas por instancia**: cada instancia (HIGH/LOW…) tiene su propia carpeta. Cambiar de tipo es **instantáneo** (solo verifica actualizaciones, no re-descarga todo).
 - **Se minimiza a la bandeja al jugar**: al pulsar JUGAR, el launcher se oculta a un icono junto al reloj (como Discord) para **ahorrar recursos**; vuelve al cerrar el juego.
 - **Tailscale** (sustituye a ZeroTier): al elegirlo puedes **"Hazlo tú mismo"** (guía) o **"Automático"** (instala Tailscale con winget si falta y te conecta solo, con confirmación) + estado y botón "Comprobar".
 - **Barra de progreso** al limpiar o reparar archivos.
 - **Detección de crashes**: si el juego se cierra por un error, sale un aviso para **compartir el reporte** (enlace mclo.gs) — solo cuando crashea de verdad, no al cerrarlo tú.
 
-### 🔧 Mejorado
+### Mejorado
 - La **limpieza/reparación es por instancia** (limpias HIGH y solo se borra HIGH).
 - El **volumen y la pausa** del fondo ahora se recuerdan.
 - **"Reportar un error"** se movió a la **tuerca de la instancia**; Ajustes queda más limpio.
 
-### 🐛 Arreglado
+### Arreglado
 - El doble **"JUGANDO"** que aparecía al jugar.
 - Al **cancelar** una instalación, el juego ya no se abre por su cuenta y te ofrece **limpiar** la instancia (la descarga en curso puede dejar archivos a medias).
 
