@@ -1,17 +1,22 @@
 # Cambios de Paput Client
 
 ## 1.0.18
-- **Carpetas por instancia**: cada instancia (HIGH/LOW…) tiene su propia carpeta. Cambiar de tipo es **instantáneo** (solo verifica actualizaciones, no re-descarga todo) y la **limpieza/reparación es por instancia** (limpias HIGH y solo se borra HIGH).
+
+### ✨ Nuevo
+- **Carpetas por instancia**: cada instancia (HIGH/LOW…) tiene su propia carpeta. Cambiar de tipo es **instantáneo** (solo verifica actualizaciones, no re-descarga todo).
 - **Se minimiza a la bandeja al jugar**: al pulsar JUGAR, el launcher se oculta a un icono junto al reloj (como Discord) para **ahorrar recursos**; vuelve al cerrar el juego.
-- **Tailscale** (sustituye a ZeroTier): al elegirlo puedes **"Hazlo tú mismo"** (guía) o **"Automático"** (instala Tailscale con winget si falta y te conecta solo, con confirmación).
-- El **volumen y la pausa** del fondo ahora se recuerdan.
-- Reparar conserva tus mundos; "Limpieza profunda" reinstala una instancia desde cero.
-- **Barra de progreso** al limpiar/reparar archivos.
-- Tailscale: comprobación de si la conexión quedó **conectada** (con estado y botón "Comprobar").
-- Arreglado el doble **"JUGANDO"** que aparecía al jugar.
-- Al **cancelar** una instalación, el juego ya no se abre por su cuenta y te ofrece **limpiar** la instancia (la descarga en curso puede dejar archivos a medias).
+- **Tailscale** (sustituye a ZeroTier): al elegirlo puedes **"Hazlo tú mismo"** (guía) o **"Automático"** (instala Tailscale con winget si falta y te conecta solo, con confirmación) + estado y botón "Comprobar".
+- **Barra de progreso** al limpiar o reparar archivos.
 - **Detección de crashes**: si el juego se cierra por un error, sale un aviso para **compartir el reporte** (enlace mclo.gs) — solo cuando crashea de verdad, no al cerrarlo tú.
-- **"Reportar un error"** se movió a la **tuerca de la instancia** (antes estaba en Ajustes); Ajustes queda más limpio.
+
+### 🔧 Mejorado
+- La **limpieza/reparación es por instancia** (limpias HIGH y solo se borra HIGH).
+- El **volumen y la pausa** del fondo ahora se recuerdan.
+- **"Reportar un error"** se movió a la **tuerca de la instancia**; Ajustes queda más limpio.
+
+### 🐛 Arreglado
+- El doble **"JUGANDO"** que aparecía al jugar.
+- Al **cancelar** una instalación, el juego ya no se abre por su cuenta y te ofrece **limpiar** la instancia (la descarga en curso puede dejar archivos a medias).
 
 ## 1.0.17
 - **Limpieza profunda**: nueva opción en la tuerca de la instancia que borra TODO lo descargado del juego (Java, recursos, mods, versiones, caché…) y conserva solo tus **mundos** y **ajustes**. Ideal si una instancia quedó mal instalada, al cambiar de versión o para liberar espacio.
