@@ -5,6 +5,8 @@ import { ScreenBg } from './ScreenBg'
 interface ConnectionSelectProps {
   instance: Instance
   onChoose: (connection: ConnectionKind) => void
+  /** Si el grupo tiene varios tipos, permite volver a elegir el tipo (LOW/HIGH). */
+  onChangeVariant?: () => void
 }
 
 /**
@@ -12,7 +14,7 @@ interface ConnectionSelectProps {
  * la dirección real ya viene en la instancia. Al elegir Tailscale, ofrece
  * "Hazlo tú mismo" (cartilla) o "Automático" (instala + conecta con la auth key).
  */
-export function ConnectionSelect({ instance, onChoose }: ConnectionSelectProps) {
+export function ConnectionSelect({ instance, onChoose, onChangeVariant }: ConnectionSelectProps) {
   const [step, setStep] = useState<'choose' | 'tailscale'>('choose')
   const [connecting, setConnecting] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -53,9 +55,21 @@ export function ConnectionSelect({ instance, onChoose }: ConnectionSelectProps) 
         {step === 'choose' ? (
           <>
             <h1 className="text-center text-xl font-bold">¿Cómo quieres conectar?</h1>
-            <p className="mt-1 mb-6 text-center text-sm text-tenso-muted">
+            <p className="mt-1 text-center text-sm text-tenso-muted">
               Elige el método de conexión al servidor de <span className="text-tenso-text">{instance.name}</span>.
             </p>
+            {onChangeVariant && (
+              <p className="mb-6 text-center text-xs text-tenso-muted">
+                ¿No es esta instancia?{' '}
+                <button
+                  onClick={onChangeVariant}
+                  className="font-semibold text-tenso-accent-soft underline-offset-2 hover:underline"
+                >
+                  Cambiar tipo
+                </button>
+              </p>
+            )}
+            {!onChangeVariant && <div className="mb-6" />}
 
             <div className="grid gap-4 sm:grid-cols-2">
               {hasPlayit && (

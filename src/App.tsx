@@ -265,6 +265,9 @@ export default function App() {
         <ConnectionSelect
           instance={activeInstance!}
           onChoose={(conn) => chooseConnection(selectedGroup.groupId, conn)}
+          onChangeVariant={
+            selectedGroup.instances.length > 1 ? () => setChangingVariant(true) : undefined
+          }
         />
       ) : (
         <InstanceScreen

@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.19
+
+### Arreglado
+- Si entras a un grupo cuyo tipo (LOW/HIGH) ya quedó recordado y te lleva directo a elegir conexión, ahora puedes pulsar **"Cambiar tipo"** ahí mismo para volver a elegir la instancia (antes te quedabas atrapado en el tipo equivocado).
+
 ## 1.0.18
 
 ### Nuevo
