@@ -49,30 +49,44 @@ function killGameProcesses(): void {
  * Como el directorio del juego (`.tensoclient`) es compartido por todas las
  * instancias, esto repara la instalación entera, no solo una instancia.
  */
-export function repairInstance(): void {
+/** Borra todo el contenido del juego salvo lo indicado en `keep`. */
+function wipeGameRoot(keep: Set<string>, label: string): void {
   // Mata el juego si estuviera abierto (no se pueden borrar archivos en uso).
   killGameProcesses()
-
-  // Conservamos: Java y assets (pesados) y el options.txt personal del jugador.
-  const keep = new Set(['runtime', 'assets', 'options.txt'])
 
   let entries: fs.Dirent[]
   try {
     entries = fs.readdirSync(GAME_ROOT, { withFileTypes: true })
   } catch {
-    // Si no existe la carpeta, no hay nada que reparar.
-    return
+    return // no existe la carpeta: nada que borrar
   }
-
   for (const entry of entries) {
     if (keep.has(entry.name)) continue
     const target = path.join(GAME_ROOT, entry.name)
     try {
       fs.rmSync(target, { recursive: true, force: true })
     } catch (err) {
-      console.error('[repairInstance] no se pudo borrar', target, err)
+      console.error(`[${label}] no se pudo borrar`, target, err)
     }
   }
+}
+
+export function repairInstance(): void {
+  // Reparación rápida: conserva Java, recursos (assets), MUNDOS y ajustes; el
+  // resto (mods, configs, versiones, librerías…) se re-descarga al jugar.
+  wipeGameRoot(new Set(['runtime', 'assets', 'saves', 'options.txt']), 'repairInstance')
+}
+
+/**
+ * Limpieza profunda: borra TODO lo descargado del juego (Java, recursos, mods,
+ * versiones, caché, resourcepacks, shaderpacks…) y conserva solo tus mundos
+ * (`saves`) y ajustes (`options.txt`). Útil si una instancia quedó mal instalada,
+ * al cambiar de versión, o para reclamar espacio. Al siguiente JUGAR se descarga
+ * todo de nuevo desde cero. Afecta a la instalación entera (las instancias
+ * comparten la carpeta del juego).
+ */
+export function deepClean(): void {
+  wipeGameRoot(new Set(['saves', 'options.txt']), 'deepClean')
 }
 
 /**

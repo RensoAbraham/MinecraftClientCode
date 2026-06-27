@@ -30,6 +30,7 @@ const api: TensoApi = {
   play: (instanceId, connection) => ipcRenderer.invoke(IPC.play, instanceId, connection),
   cancelPlay: () => ipcRenderer.invoke(IPC.cancelPlay),
   repairInstance: () => ipcRenderer.invoke(IPC.repairInstance),
+  deepClean: () => ipcRenderer.invoke(IPC.deepClean),
   uploadLog: () => ipcRenderer.invoke(IPC.uploadLog),
   openGameLogs: () => ipcRenderer.invoke(IPC.openGameLogs),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),

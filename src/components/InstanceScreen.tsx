@@ -30,8 +30,9 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const [paused, setPaused] = useState(false)
   const [volume, setVolume] = useState(0.4)
   const [confirmRepair, setConfirmRepair] = useState(false)
+  const [confirmDeep, setConfirmDeep] = useState(false)
   const [repairing, setRepairing] = useState(false)
-  const [repaired, setRepaired] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [showCustomize, setShowCustomize] = useState(false)
   const [customizing, setCustomizing] = useState(false)
   const [showOpts, setShowOpts] = useState(false)
@@ -112,11 +113,26 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   async function handleRepair() {
     setConfirmRepair(false)
     setRepairing(true)
-    setRepaired(false)
+    setNotice(null)
     try {
       await window.tenso.repairInstance()
-      setRepaired(true)
-      setTimeout(() => setRepaired(false), 4000)
+      setNotice('Instancia reparada. Pulsa JUGAR para volver a descargar los archivos.')
+      setTimeout(() => setNotice(null), 5000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRepairing(false)
+    }
+  }
+
+  async function handleDeepClean() {
+    setConfirmDeep(false)
+    setRepairing(true)
+    setNotice(null)
+    try {
+      await window.tenso.deepClean()
+      setNotice('Limpieza profunda completa. Pulsa JUGAR para reinstalar desde cero (tardará más).')
+      setTimeout(() => setNotice(null), 7000)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -199,10 +215,10 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
         </div>
       </div>
 
-      {/* Aviso de reparación completada */}
-      {repaired && (
-        <div className="anim-fade-in absolute top-16 right-4 z-10 max-w-xs rounded-lg border border-green-500/40 bg-tenso-panel/90 px-3 py-2 text-xs text-green-300 backdrop-blur">
-          Instancia reparada. Pulsa JUGAR para volver a descargar los archivos.
+      {/* Aviso de reparación / limpieza completada */}
+      {notice && (
+        <div className="anim-fade-in absolute top-4 right-4 z-10 max-w-xs rounded-lg border border-green-500/40 bg-tenso-panel/90 px-3 py-2 text-xs text-green-300 backdrop-blur">
+          {notice}
         </div>
       )}
 
@@ -399,6 +415,15 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
               </button>
             </div>
 
+            {/* Limpieza profunda (reinstalar desde cero) */}
+            <button
+              onClick={() => { setShowOpts(false); setConfirmDeep(true) }}
+              disabled={repairing || busy}
+              className="mt-2 w-full rounded-xl border border-tenso-border bg-tenso-panel-2 py-2 text-xs text-tenso-muted hover:border-tenso-accent hover:text-tenso-accent-soft disabled:opacity-50"
+            >
+              Limpieza profunda (reinstalar desde cero)
+            </button>
+
             <div className="mt-5 flex justify-end">
               <button
                 onClick={() => setShowOpts(false)}
@@ -439,6 +464,41 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
               >
                 Reparar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación de limpieza profunda */}
+      {confirmDeep && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setConfirmDeep(false)}>
+          <div
+            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold">Limpieza profunda</h2>
+            <p className="mt-2 text-sm text-tenso-muted">
+              Borra <span className="font-semibold text-tenso-text">todo lo descargado</span> del juego
+              (Java, recursos, mods, versiones, caché…) y conserva solo tus <span className="font-semibold text-tenso-text">mundos</span> y tus
+              <span className="font-semibold text-tenso-text"> ajustes</span>. Úsalo si quedó mal instalado o vas a cambiar de versión.
+              Al siguiente JUGAR se descarga todo de nuevo (tardará bastante más).
+            </p>
+            <p className="mt-2 text-xs text-tenso-muted">
+              Afecta a la instalación entera (las instancias comparten los archivos del juego).
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeep(false)}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeepClean}
+                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
+              >
+                Limpiar todo
               </button>
             </div>
           </div>

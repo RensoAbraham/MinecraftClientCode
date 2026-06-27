@@ -1,5 +1,9 @@
 # Cambios de Paput Client
 
+## 1.0.17
+- **Limpieza profunda**: nueva opción en la tuerca de la instancia que borra TODO lo descargado del juego (Java, recursos, mods, versiones, caché…) y conserva solo tus **mundos** y **ajustes**. Ideal si una instancia quedó mal instalada, al cambiar de versión o para liberar espacio.
+- **Reparar ya no borra tus mundos** (`saves`): se conservan al reparar.
+
 ## 1.0.16
 - **Reportar errores con un clic**: en Ajustes → "Reportar un error" → **Crear enlace** sube el último error a mclo.gs y te da un **enlace corto** (copiado al portapapeles) para enviárselo a Renso. Botón "Carpeta" para abrir los registros si hace falta.
 

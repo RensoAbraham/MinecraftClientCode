@@ -262,6 +262,11 @@ export interface TensoApi {
    */
   repairInstance(): Promise<void>
   /**
+   * Limpieza profunda: borra TODO lo descargado del juego (Java, recursos, mods,
+   * versiones, caché…) y conserva solo tus mundos y ajustes. Reinstala desde cero.
+   */
+  deepClean(): Promise<void>
+  /**
    * Sube el último error del juego (crash o log) a mclo.gs y devuelve un enlace
    * corto para compartir. También copia el enlace al portapapeles.
    */
@@ -388,6 +393,7 @@ export const IPC = {
   play: 'tenso:play',
   cancelPlay: 'tenso:cancelPlay',
   repairInstance: 'tenso:repairInstance',
+  deepClean: 'tenso:deepClean',
   uploadLog: 'tenso:uploadLog',
   openGameLogs: 'tenso:openGameLogs',
   getSettings: 'tenso:getSettings',
