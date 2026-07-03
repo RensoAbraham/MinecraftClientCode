@@ -507,9 +507,15 @@ export function DevPanel({ onClose }: DevPanelProps) {
 
                     {/* Instancias */}
                     {g.instances.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-tenso-border py-6 text-center text-sm text-tenso-muted">
-                        Sin instancias. Crea una o importa un .mrpack.
-                      </p>
+                      <div className="rounded-lg border border-dashed border-tenso-border py-8 text-center">
+                        <p className="mb-3 text-sm text-tenso-muted">Este grupo aún no tiene instancias.</p>
+                        <button
+                          onClick={() => setAddingFor(addingFor === g.id ? null : g.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-tenso-accent-soft"
+                        >
+                          <PlusIcon /> Añadir instancia
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2.5">
                         {g.instances.map((inst) => (
@@ -587,14 +593,19 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                         <MenuItem icon={<DownloadIcon />} onClick={() => { setMenuFor(null); pullGameConfig(g.id, inst.id) }}>
                                           Traer config del juego
                                         </MenuItem>
-                                        <div className="my-1 h-px bg-tenso-border" />
-                                        <MenuItem icon={<TrashIcon />} danger onClick={() => { setMenuFor(null); delInstance(g.id, inst.id, inst.name) }}>
-                                          Eliminar instancia
-                                        </MenuItem>
                                       </div>
                                     </>
                                   )}
                                 </div>
+
+                                {/* Eliminar esta instancia */}
+                                <button
+                                  onClick={() => delInstance(g.id, inst.id, inst.name)}
+                                  className="grid h-[30px] w-[30px] place-items-center rounded-lg border border-tenso-border bg-tenso-panel-2 text-tenso-muted transition-colors hover:border-red-500/60 hover:text-red-400"
+                                  title="Eliminar esta instancia"
+                                >
+                                  <TrashIcon />
+                                </button>
                               </div>
                             </div>
 
@@ -648,6 +659,14 @@ export function DevPanel({ onClose }: DevPanelProps) {
                             )}
                           </div>
                         ))}
+
+                        {/* Añadir otra instancia (p. ej. una versión Low y otra High) */}
+                        <button
+                          onClick={() => setAddingFor(addingFor === g.id ? null : g.id)}
+                          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-tenso-border py-3 text-sm font-medium text-tenso-muted transition-colors hover:border-tenso-accent hover:text-tenso-accent-soft"
+                        >
+                          <PlusIcon /> Añadir instancia
+                        </button>
                       </div>
                     )}
                   </div>
