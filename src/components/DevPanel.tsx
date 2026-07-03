@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { DevGroup, DevInstance, InstancePatch, NewInstance, R2ConfigView } from '../../shared/ipc'
 import { R2Settings } from './R2Settings'
 import { R2Manager } from './R2Manager'
+import { ResourceManager } from './ResourceManager'
 
 interface DevPanelProps {
   onClose: () => void
@@ -51,7 +52,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
   // Panel de mods abierto: { groupId, instanceId } + lista.
   const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
   const [mods, setMods] = useState<{ name: string; enabled: boolean; bytes: number }[]>([])
-  const [modFilter, setModFilter] = useState('')
   const [pullMsg, setPullMsg] = useState<string | null>(null)
 
   async function reload() {
@@ -191,7 +191,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
       setModsFor(null)
       return
     }
-    setModFilter('')
     setModsFor({ groupId, instanceId })
     setMods(await window.tenso.devListMods(groupId, instanceId))
   }
@@ -624,60 +623,14 @@ export function DevPanel({ onClose }: DevPanelProps) {
                               </div>
                             )}
 
-                            {/* Panel de mods (activar/desactivar sin borrar) */}
+                            {/* Gestor de recursos (mods / packs / configs) de la instancia */}
                             {modsFor?.groupId === g.id && modsFor.instanceId === inst.id && (
-                              <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                  <p className="text-xs font-semibold text-tenso-muted">
-                                    Mods ({mods.length}) ·{' '}
-                                    <span className="text-tenso-accent-soft">
-                                      {Math.round(mods.filter((m) => m.enabled).reduce((a, m) => a + m.bytes, 0) / 1024 / 1024)} MB activos
-                                    </span>
-                                  </p>
-                                  {mods.length > 0 && (
-                                    <input
-                                      type="text"
-                                      value={modFilter}
-                                      onChange={(e) => setModFilter(e.target.value)}
-                                      placeholder="Buscar mod…"
-                                      spellCheck={false}
-                                      className="w-40 rounded-lg border border-tenso-border bg-tenso-panel px-2 py-1 text-xs text-tenso-text outline-none focus:border-tenso-accent"
-                                    />
-                                  )}
-                                </div>
-                                {mods.length === 0 ? (
-                                  <p className="text-xs text-tenso-muted">
-                                    No hay mods. Usa "Carpeta" para añadir archivos .jar.
-                                  </p>
-                                ) : (
-                                  <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
-                                    {mods
-                                      .filter((m) => m.name.toLowerCase().includes(modFilter.toLowerCase()))
-                                      .map((m) => (
-                                        <label key={m.name} className="flex cursor-pointer items-center gap-2 text-sm">
-                                          <input
-                                            type="checkbox"
-                                            checked={m.enabled}
-                                            onChange={(e) => toggleMod(m.name, e.target.checked)}
-                                            className="h-4 w-4 shrink-0 accent-tenso-accent"
-                                          />
-                                          <span className={`flex-1 truncate ${m.enabled ? 'text-tenso-text' : 'text-tenso-muted line-through'}`}>
-                                            {m.name}
-                                          </span>
-                                          <span className="shrink-0 text-[11px] text-tenso-muted">
-                                            {m.bytes >= 1024 * 1024 ? `${Math.round(m.bytes / 1024 / 1024)} MB` : `${Math.round(m.bytes / 1024)} KB`}
-                                          </span>
-                                        </label>
-                                      ))}
-                                    {mods.filter((m) => m.name.toLowerCase().includes(modFilter.toLowerCase())).length === 0 && (
-                                      <p className="text-xs text-tenso-muted">Sin resultados para "{modFilter}".</p>
-                                    )}
-                                  </div>
-                                )}
-                                <p className="mt-2 text-[11px] text-tenso-muted">
-                                  Los desactivados no se publican. Pulsa Publicar para aplicar el cambio.
-                                </p>
-                              </div>
+                              <ResourceManager
+                                instanceName={inst.name}
+                                mods={mods}
+                                onToggle={toggleMod}
+                                onOpenFolder={() => window.tenso.devOpenFolder(g.id, inst.id)}
+                              />
                             )}
                           </div>
                         ))}
