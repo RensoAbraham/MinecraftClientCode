@@ -277,19 +277,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Estado de R2 */}
-          <button
-            onClick={() => setShowR2(true)}
-            className="flex items-center gap-2 rounded-xl border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm font-medium text-tenso-muted transition-colors hover:text-tenso-text"
-            title="Configurar Cloudflare R2 (la nube desde donde descargan tus amigas)"
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${r2 ? 'bg-green-400' : 'bg-amber-400'}`}
-              aria-hidden
-            />
-            R2 {r2 ? 'lista' : 'sin configurar'}
-          </button>
-
           <button
             onClick={publish}
             disabled={publishing}
@@ -332,52 +319,84 @@ export function DevPanel({ onClose }: DevPanelProps) {
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl p-6">
-          {/* Estado de R2 (compacto): aviso si falta, o pruebas si está lista */}
-          {!r2 ? (
-            <p className="mb-6 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
-              R2 sin configurar: al publicar solo se genera en local. Configúrala (botón “R2” arriba)
-              para que tus amigas puedan descargar.
-            </p>
-          ) : (
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              <button
-                onClick={testR2}
-                disabled={testing}
-                className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text disabled:opacity-60"
-              >
-                {testing ? 'Probando…' : 'Probar conexión R2'}
-              </button>
-              <button
-                onClick={() => setShowR2Manager(true)}
-                className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
-                title="Ver y borrar contenido de R2 (por grupo o todo)"
-              >
-                Gestionar R2
-              </button>
-              {r2Test && (
-                <span className={`text-xs ${r2Test.ok ? 'text-green-400' : 'text-tenso-accent-soft'}`}>
+          {/* Tarjeta de configuración: crear grupo + almacenamiento (R2) */}
+          <div className="mb-6 grid gap-5 rounded-2xl border border-tenso-border bg-tenso-panel p-4 sm:grid-cols-2 sm:gap-0">
+            {/* Crear grupo */}
+            <div className="sm:pr-5">
+              <label className="mb-2 block text-[11px] font-bold tracking-wide text-tenso-muted uppercase">
+                Nuevo grupo
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className={`${input} flex-1`}
+                  placeholder="Nombre (ej. PaputGanga)"
+                  value={newGroup}
+                  onChange={(e) => setNewGroup(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && createGroup()}
+                />
+                <button
+                  onClick={createGroup}
+                  disabled={!newGroup.trim()}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-tenso-accent-soft disabled:opacity-40"
+                >
+                  <PlusIcon /> Crear
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-tenso-muted">
+                Un grupo reúne varias instancias que compartes con un mismo código.
+              </p>
+            </div>
+
+            {/* Almacenamiento (R2) */}
+            <div className="border-t border-tenso-border pt-5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5">
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-[11px] font-bold tracking-wide text-tenso-muted uppercase">
+                  Almacenamiento en la nube
+                </label>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-tenso-muted">
+                  <span className={`h-2 w-2 rounded-full ${r2 ? 'bg-green-400' : 'bg-amber-400'}`} aria-hidden />
+                  {r2 ? 'R2 lista' : 'R2 sin configurar'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setShowR2(true)}
+                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
+                >
+                  {r2 ? 'Reconfigurar' : 'Configurar R2'}
+                </button>
+                {r2 && (
+                  <>
+                    <button
+                      onClick={testR2}
+                      disabled={testing}
+                      className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text disabled:opacity-60"
+                    >
+                      {testing ? 'Probando…' : 'Probar conexión'}
+                    </button>
+                    <button
+                      onClick={() => setShowR2Manager(true)}
+                      className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
+                      title="Ver y borrar contenido de R2 (por grupo o todo)"
+                    >
+                      Gestionar
+                    </button>
+                  </>
+                )}
+              </div>
+              {r2Test ? (
+                <p className={`mt-2 text-[11px] ${r2Test.ok ? 'text-green-400' : 'text-tenso-accent-soft'}`}>
                   {r2Test.ok ? '✓ ' : '✗ '}
                   {r2Test.message}
-                </span>
+                </p>
+              ) : (
+                <p className="mt-2 text-[11px] text-tenso-muted">
+                  {r2
+                    ? 'La nube desde donde tus amigas descargan los modpacks.'
+                    : 'Sin R2, al publicar solo se genera en local; nadie podría descargar.'}
+                </p>
               )}
             </div>
-          )}
-
-          {/* Crear grupo */}
-          <div className="mb-6 flex gap-2">
-            <input
-              className={`${input} max-w-xs flex-1`}
-              placeholder="Nombre de un grupo nuevo (ej. PaputGanga)"
-              value={newGroup}
-              onChange={(e) => setNewGroup(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && createGroup()}
-            />
-            <button
-              onClick={createGroup}
-              className="flex items-center gap-1.5 rounded-lg bg-tenso-panel-2 px-4 py-2 text-sm font-medium text-tenso-text transition-colors hover:bg-tenso-border"
-            >
-              <PlusIcon /> Crear grupo
-            </button>
           </div>
 
           {loading ? (
