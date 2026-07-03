@@ -45,7 +45,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
   const [loadingVer, setLoadingVer] = useState(false)
   // Import en curso: { groupId, label, fraction } | null
   const [importing, setImporting] = useState<{ groupId: string; label: string; fraction: number } | null>(null)
-  const [showHelp, setShowHelp] = useState(true)
   // Edición de una instancia: { groupId, instanceId } + sus campos.
   const [editing, setEditing] = useState<{ groupId: string; instanceId: string } | null>(null)
   const [editForm, setEditForm] = useState<InstancePatch>({})
@@ -53,6 +52,8 @@ export function DevPanel({ onClose }: DevPanelProps) {
   const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
   const [mods, setMods] = useState<{ name: string; enabled: boolean; bytes: number }[]>([])
   const [pullMsg, setPullMsg] = useState<string | null>(null)
+  // Menú "···" de acciones abierto (por id de instancia).
+  const [menuFor, setMenuFor] = useState<string | null>(null)
 
   async function reload() {
     setGroups(await window.tenso.devListGroups())
@@ -331,74 +332,36 @@ export function DevPanel({ onClose }: DevPanelProps) {
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl p-6">
-          {/* Guía rápida */}
-          <div className="mb-6 rounded-2xl border border-tenso-border bg-tenso-panel/60 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-bold">
-                <HelpIcon /> Cómo funciona
-              </h2>
+          {/* Estado de R2 (compacto): aviso si falta, o pruebas si está lista */}
+          {!r2 ? (
+            <p className="mb-6 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+              R2 sin configurar: al publicar solo se genera en local. Configúrala (botón “R2” arriba)
+              para que tus amigas puedan descargar.
+            </p>
+          ) : (
+            <div className="mb-6 flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setShowHelp((s) => !s)}
-                className="text-xs text-tenso-muted hover:text-tenso-text"
+                onClick={testR2}
+                disabled={testing}
+                className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text disabled:opacity-60"
               >
-                {showHelp ? 'Ocultar' : 'Mostrar'}
+                {testing ? 'Probando…' : 'Probar conexión R2'}
               </button>
+              <button
+                onClick={() => setShowR2Manager(true)}
+                className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
+                title="Ver y borrar contenido de R2 (por grupo o todo)"
+              >
+                Gestionar R2
+              </button>
+              {r2Test && (
+                <span className={`text-xs ${r2Test.ok ? 'text-green-400' : 'text-tenso-accent-soft'}`}>
+                  {r2Test.ok ? '✓ ' : '✗ '}
+                  {r2Test.message}
+                </span>
+              )}
             </div>
-            {showHelp && (
-              <ol className="mt-3 grid gap-2 text-sm text-tenso-muted sm:grid-cols-2">
-                <Step n={1} title="Crea un grupo">
-                  Un conjunto de instancias (p. ej. <strong>PaputGanga</strong>).
-                </Step>
-                <Step n={2} title="Añade instancias">
-                  Créalas a mano o <strong>importa un .mrpack</strong> de Modrinth.
-                </Step>
-                <Step n={3} title="Pon sus archivos">
-                  Mods/config, el <strong>servidor</strong> y el arte (icon.png / background).
-                </Step>
-                <Step n={4} title="Publícalas">
-                  Marca cada instancia como <strong>Publicada</strong>.
-                </Step>
-                <Step n={5} title="Configura R2 y pulsa Publicar">
-                  Una sola vez; sube los archivos a la nube.
-                </Step>
-                <Step n={6} title="Comparte el código">
-                  Copia el <strong>código del grupo</strong> y dáselo a tu gente.
-                </Step>
-              </ol>
-            )}
-            {!r2 && (
-              <p className="mt-3 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
-                R2 sin configurar: al publicar solo se genera en local. Configúrala (botón “R2”) para
-                que tus amigas puedan descargar.
-              </p>
-            )}
-
-            {/* Estado real de la conexión con R2 */}
-            {r2 && (
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={testR2}
-                  disabled={testing}
-                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text disabled:opacity-60"
-                >
-                  {testing ? 'Probando…' : 'Probar conexión R2'}
-                </button>
-                <button
-                  onClick={() => setShowR2Manager(true)}
-                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted transition-colors hover:text-tenso-text"
-                  title="Ver y borrar contenido de R2 (por grupo o todo)"
-                >
-                  Gestionar R2
-                </button>
-                {r2Test && (
-                  <span className={`text-xs ${r2Test.ok ? 'text-green-400' : 'text-tenso-accent-soft'}`}>
-                    {r2Test.ok ? '✓ ' : '✗ '}
-                    {r2Test.message}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Crear grupo */}
           <div className="mb-6 flex gap-2">
@@ -529,9 +492,9 @@ export function DevPanel({ onClose }: DevPanelProps) {
                         Sin instancias. Crea una o importa un .mrpack.
                       </p>
                     ) : (
-                      <div className="flex flex-col divide-y divide-tenso-border">
+                      <div className="flex flex-col gap-2.5">
                         {g.instances.map((inst) => (
-                          <div key={inst.id} className="py-3 first:pt-0 last:pb-0">
+                          <div key={inst.id} className="rounded-xl border border-tenso-border bg-tenso-panel-2/40 p-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="flex items-center gap-2 truncate font-medium">
@@ -552,21 +515,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <button onClick={() => startEdit(g.id, inst)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Editar nombre, servidor, descripción e imagen">
-                                  <PencilIcon /> Editar
-                                </button>
-                                <button onClick={() => window.tenso.devOpenFolder(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Abrir la carpeta para arrastrar mods/configs">
-                                  <FolderIcon /> Carpeta
-                                </button>
-                                <button onClick={() => importFolder(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Copiar mods/configs desde otra carpeta">
-                                  <LinkIcon /> Vincular
-                                </button>
-                                <button onClick={() => openMods(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Activar/desactivar mods de esta instancia">
-                                  Mods
-                                </button>
-                                <button onClick={() => pullGameConfig(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text" title="Traer la config editada dentro del juego (FancyMenu, etc.) para poder publicarla">
-                                  Traer del juego
-                                </button>
+                                {/* Estado: publicada u oculta (clic para alternar) */}
                                 <button
                                   onClick={() => toggle(g.id, inst.id, !inst.published)}
                                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
@@ -574,13 +523,59 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                       ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
                                       : 'bg-tenso-panel-2 text-tenso-muted hover:text-tenso-text'
                                   }`}
-                                  title={inst.published ? 'Visible para los jugadores' : 'Oculta para los jugadores'}
+                                  title={inst.published ? 'Visible para los jugadores. Clic para ocultar.' : 'Oculta. Clic para publicar.'}
                                 >
-                                  {inst.published ? 'Publicada' : 'Oculta'}
+                                  {inst.published ? '● Publicada' : '○ Oculta'}
                                 </button>
-                                <button onClick={() => delInstance(g.id, inst.id, inst.name)} className="rounded-lg px-2 py-1.5 text-xs text-tenso-muted hover:text-tenso-accent-soft" title="Eliminar la instancia">
-                                  <TrashIcon />
+
+                                {/* Acción principal: gestionar recursos (mods, packs, configs) */}
+                                <button
+                                  onClick={() => openMods(g.id, inst.id)}
+                                  className="flex items-center gap-1.5 rounded-lg border border-tenso-accent/60 bg-tenso-accent/10 px-3 py-1.5 text-xs font-semibold text-tenso-accent-soft transition-colors hover:bg-tenso-accent/20"
+                                  title="Mods, paquetes de recursos y configuraciones"
+                                >
+                                  <BoxIcon /> Recursos
                                 </button>
+
+                                {/* Editar metadatos e imagen */}
+                                <button
+                                  onClick={() => startEdit(g.id, inst)}
+                                  className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-xs text-tenso-muted hover:text-tenso-text"
+                                  title="Nombre, versión, servidor, descripción e imagen"
+                                >
+                                  <PencilIcon /> Editar
+                                </button>
+
+                                {/* Menú de más acciones */}
+                                <div className="relative">
+                                  <button
+                                    onClick={() => setMenuFor(menuFor === inst.id ? null : inst.id)}
+                                    className="grid h-[30px] w-[30px] place-items-center rounded-lg border border-tenso-border bg-tenso-panel-2 text-tenso-muted hover:text-tenso-text"
+                                    title="Más acciones"
+                                  >
+                                    <DotsIcon />
+                                  </button>
+                                  {menuFor === inst.id && (
+                                    <>
+                                      <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
+                                      <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-tenso-border bg-tenso-panel shadow-xl">
+                                        <MenuItem icon={<FolderIcon />} onClick={() => { setMenuFor(null); window.tenso.devOpenFolder(g.id, inst.id) }}>
+                                          Abrir carpeta
+                                        </MenuItem>
+                                        <MenuItem icon={<LinkIcon />} onClick={() => { setMenuFor(null); importFolder(g.id, inst.id) }}>
+                                          Vincular carpeta…
+                                        </MenuItem>
+                                        <MenuItem icon={<DownloadIcon />} onClick={() => { setMenuFor(null); pullGameConfig(g.id, inst.id) }}>
+                                          Traer config del juego
+                                        </MenuItem>
+                                        <div className="my-1 h-px bg-tenso-border" />
+                                        <MenuItem icon={<TrashIcon />} danger onClick={() => { setMenuFor(null); delInstance(g.id, inst.id, inst.name) }}>
+                                          Eliminar instancia
+                                        </MenuItem>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
@@ -668,17 +663,28 @@ export function DevPanel({ onClose }: DevPanelProps) {
   )
 }
 
-/** Paso numerado de la guía rápida. */
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+/** Ítem de un menú desplegable "···". */
+function MenuItem({
+  icon,
+  children,
+  onClick,
+  danger,
+}: {
+  icon: ReactNode
+  children: ReactNode
+  onClick: () => void
+  danger?: boolean
+}) {
   return (
-    <li className="flex gap-2.5">
-      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-tenso-accent/15 text-[11px] font-bold text-tenso-accent-soft">
-        {n}
-      </span>
-      <span>
-        <span className="font-semibold text-tenso-text">{title}.</span> {children}
-      </span>
-    </li>
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-tenso-panel-2 ${
+        danger ? 'text-tenso-accent-soft hover:text-red-400' : 'text-tenso-muted hover:text-tenso-text'
+      }`}
+    >
+      <span className="grid h-4 w-4 place-items-center">{icon}</span>
+      {children}
+    </button>
   )
 }
 
@@ -717,15 +723,6 @@ function ImageIcon() {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <path d="m21 15-5-5L5 21" />
-    </svg>
-  )
-}
-function HelpIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-tenso-accent-soft" aria-hidden>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12" y2="17" />
     </svg>
   )
 }
@@ -773,6 +770,33 @@ function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M3 6h18M8 6V4h8v2m-9 0v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6" />
+    </svg>
+  )
+}
+function BoxIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <polyline points="3.29 7 12 12 20.71 7" />
+      <line x1="12" y1="22" x2="12" y2="12" />
+    </svg>
+  )
+}
+function DotsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  )
+}
+function DownloadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   )
 }
