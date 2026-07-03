@@ -13,8 +13,6 @@ interface SidebarProps {
   onOpenSettings: () => void
   onOpenAccounts: () => void
   onOpenSkin: () => void
-  /** Abre el menú de suscripciones (broma). Si no se pasa, la corona no aparece. */
-  onOpenSubs?: () => void
   /** Si se pasa (modo dev), muestra el botón del Panel Dev. */
   onOpenDev?: () => void
   /** Si se pasa (modo dev), muestra el botón del menú de vistas previas. */
@@ -36,7 +34,6 @@ export function Sidebar({
   onOpenSettings,
   onOpenAccounts,
   onOpenSkin,
-  onOpenSubs,
   onOpenDev,
   onPreviewLogin,
 }: SidebarProps) {
@@ -92,17 +89,6 @@ export function Sidebar({
 
       {/* Empuja el grupo inferior de botones hacia abajo */}
       <div className="mt-auto" />
-
-      {/* Suscripción (broma): aparece solo tras verse la primera vez al jugar */}
-      {onOpenSubs && (
-        <button
-          onClick={onOpenSubs}
-          className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
-          title="PaputClient Premium"
-        >
-          <CrownIcon />
-        </button>
-      )}
 
       {onPreviewLogin && (
         <button
@@ -195,14 +181,6 @@ function EyeIcon() {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
       <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
-
-function CrownIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M3 8l3.5 3L12 5l5.5 6L21 8l-1.5 10h-15L3 8Zm2.2 8h13.6l.6-4.2-2.7 2.3-3.7-4-3.7 4-2.7-2.3.6 4.2Z" />
     </svg>
   )
 }

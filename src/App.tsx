@@ -8,7 +8,6 @@ import { DevPanel } from './components/DevPanel'
 import { ModeSelect } from './components/ModeSelect'
 import { AccountMenu } from './components/AccountMenu'
 import { SkinEditor } from './components/SkinEditor'
-import { SubscriptionMenu } from './components/SubscriptionMenu'
 import { HomeScreen } from './components/HomeScreen'
 import { VariantSelect } from './components/VariantSelect'
 import { ConnectionSelect } from './components/ConnectionSelect'
@@ -63,7 +62,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showAccounts, setShowAccounts] = useState(false)
   const [showSkin, setShowSkin] = useState(false)
-  const [showSubs, setShowSubs] = useState(false)
   const [adding, setAdding] = useState(false)
   const [changingVariant, setChangingVariant] = useState(false)
   const [changingConnection, setChangingConnection] = useState(false)
@@ -71,7 +69,6 @@ export default function App() {
   const [showGuide, setShowGuide] = useState(false)
   const [guideSeen, setGuideSeen] = useState(true)
   const [theme, setThemeState] = useState<'dark' | 'light'>('dark')
-  const [premiumSeen, setPremiumSeen] = useState(false)
 
   // Tipo (instancia) elegido por grupo, recordado en disco.
   const [variants, setVariants] = useState<Record<string, string>>(() => {
@@ -91,13 +88,6 @@ export default function App() {
     }
   })
 
-  function triggerPremiumGag() {
-    setPremiumSeen(true)
-    setShowSubs(true)
-    // Se guarda en ajustes (fiable; no se borra al limpiar caché ni al actualizar).
-    window.tenso.setSettings({ premiumGagSeen: true }).catch(() => {})
-  }
-
   useEffect(() => {
     async function bootstrap() {
       const [insts, dev, settings] = await Promise.all([
@@ -114,16 +104,11 @@ export default function App() {
       // Migración desde el formato viejo (localStorage) al fiable (ajustes): si ya
       // estaban marcados antes, lo respetamos para no mostrarlos ni una vez más.
       const guideDone = (settings?.guideSeen ?? false) || !!localStorage.getItem('paput.guideSeen')
-      const premiumDone =
-        (settings?.premiumGagSeen ?? false) || !!localStorage.getItem('paput.premiumGagSeen')
       setGuideSeen(guideDone)
-      setPremiumSeen(premiumDone)
       const t: 'dark' | 'light' = settings?.theme === 'light' ? 'light' : 'dark'
       setThemeState(t)
       document.documentElement.dataset.theme = t
       if (guideDone && !settings?.guideSeen) window.tenso.setSettings({ guideSeen: true }).catch(() => {})
-      if (premiumDone && !settings?.premiumGagSeen)
-        window.tenso.setSettings({ premiumGagSeen: true }).catch(() => {})
       setMode(dev ? 'select' : 'player')
       setChecking(false)
     }
@@ -248,7 +233,6 @@ export default function App() {
         onOpenSettings={() => setShowSettings(true)}
         onOpenAccounts={() => setShowAccounts(true)}
         onOpenSkin={() => setShowSkin(true)}
-        onOpenSubs={premiumSeen ? () => setShowSubs(true) : undefined}
         onOpenDev={backToSelect}
         onPreviewLogin={isDev ? () => setShowPreviews(true) : undefined}
       />
@@ -280,8 +264,6 @@ export default function App() {
             connOptions.length > 1 ? () => setChangingConnection(true) : undefined
           }
           onCustomized={handleInstanceUpdated}
-          premiumSeen={premiumSeen}
-          onFirstPlay={triggerPremiumGag}
         />
       )}
 
@@ -300,7 +282,6 @@ export default function App() {
         />
       )}
       {showSkin && account && <SkinEditor account={account} onClose={() => setShowSkin(false)} />}
-      {showSubs && <SubscriptionMenu onClose={() => setShowSubs(false)} />}
       {adding && <AccessGate onUnlock={handleUnlock} onCancel={() => setAdding(false)} />}
 
       {showPreviews && <PreviewMenu onClose={() => setShowPreviews(false)} />}

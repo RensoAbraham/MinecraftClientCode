@@ -12,17 +12,13 @@ interface InstanceScreenProps {
   onChangeConnection?: () => void
   /** Se llama cuando la jugadora personaliza (o restaura) la imagen/fondo. */
   onCustomized?: (updated: Instance) => void
-  /** ¿Ya se vio el gag Premium? Si no, el primer JUGAR lo dispara en vez de jugar. */
-  premiumSeen: boolean
-  /** Se llama en el primer JUGAR (muestra el gag y activa la corona en la barra). */
-  onFirstPlay: () => void
 }
 
 /**
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized, premiumSeen, onFirstPlay }: InstanceScreenProps) {
+export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized }: InstanceScreenProps) {
   const progress = useProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,11 +123,6 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
 
   async function handlePlay() {
     if (busy) return
-    // La primera vez (y solo una), troleamos con el panel Premium en vez de jugar.
-    if (!premiumSeen) {
-      onFirstPlay()
-      return
-    }
     setBusy(true)
     setError(null)
     try {

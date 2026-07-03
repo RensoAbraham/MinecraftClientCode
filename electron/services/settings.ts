@@ -14,7 +14,6 @@ const DEFAULTS: Settings = {
   maxRamMb: 4096,
   autoJoin: false,
   guideSeen: false,
-  premiumGagSeen: false,
   theme: 'dark',
 }
 
