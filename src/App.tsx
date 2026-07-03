@@ -14,6 +14,7 @@ import { ConnectionSelect } from './components/ConnectionSelect'
 import { PreviewMenu } from './components/PreviewMenu'
 import { GuiaRapida } from './components/GuiaRapida'
 import { UpdateBanner } from './components/UpdateBanner'
+import { useProgress } from './hooks/useProgress'
 import type { Account, ConnectionKind, Instance } from '../shared/ipc'
 
 type Mode = 'select' | 'dev' | 'player'
@@ -69,6 +70,11 @@ export default function App() {
   const [showGuide, setShowGuide] = useState(false)
   const [guideSeen, setGuideSeen] = useState(true)
   const [theme, setThemeState] = useState<'dark' | 'light'>('dark')
+  // Progreso y "instancia en marcha" viven AQUÍ (no en InstanceScreen), para que
+  // sobrevivan al navegar a Inicio y volver: si no, la barra de descarga se
+  // perdía y reaparecía "JUGAR" aunque la descarga siguiera en curso.
+  const progress = useProgress()
+  const [playingId, setPlayingId] = useState<string | null>(null)
 
   // Tipo (instancia) elegido por grupo, recordado en disco.
   const [variants, setVariants] = useState<Record<string, string>>(() => {
@@ -264,6 +270,9 @@ export default function App() {
             connOptions.length > 1 ? () => setChangingConnection(true) : undefined
           }
           onCustomized={handleInstanceUpdated}
+          progress={progress}
+          busy={playingId === activeInstance!.id}
+          onBusyChange={(b) => setPlayingId(b ? activeInstance!.id : null)}
         />
       )}
 

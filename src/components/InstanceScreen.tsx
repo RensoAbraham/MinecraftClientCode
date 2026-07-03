@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ConnectionKind, Instance } from '../../shared/ipc'
-import { useProgress } from '../hooks/useProgress'
+import type { ConnectionKind, Instance, Progress } from '../../shared/ipc'
 
 interface InstanceScreenProps {
   instance: Instance
@@ -12,15 +11,19 @@ interface InstanceScreenProps {
   onChangeConnection?: () => void
   /** Se llama cuando la jugadora personaliza (o restaura) la imagen/fondo. */
   onCustomized?: (updated: Instance) => void
+  /** Progreso global (vive en App para sobrevivir a la navegación). */
+  progress: Progress
+  /** ¿Esta instancia está lanzándose/jugándose? (estado en App, no local). */
+  busy: boolean
+  /** Marca/desmarca esta instancia como la que está en marcha. */
+  onBusyChange: (busy: boolean) => void
 }
 
 /**
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized }: InstanceScreenProps) {
-  const progress = useProgress()
-  const [busy, setBusy] = useState(false)
+export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized, progress, busy, onBusyChange }: InstanceScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [bgFailed, setBgFailed] = useState(false)
   const [paused, setPaused] = useState(() => localStorage.getItem('paput.bgPaused') === '1')
@@ -123,20 +126,20 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
 
   async function handlePlay() {
     if (busy) return
-    setBusy(true)
+    onBusyChange(true)
     setError(null)
     try {
       await window.tenso.play(instance.id, connection)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setBusy(false)
+      onBusyChange(false)
     }
   }
 
   async function handleCancel() {
     await window.tenso.cancelPlay().catch(() => {})
-    setBusy(false)
+    onBusyChange(false)
     setError(null)
   }
 
@@ -185,7 +188,9 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   }
 
   // Hay algo que cancelar si está preparando/descargando o el juego está abierto.
-  const canCancel = busy || progress.stage === 'running'
+  // Solo esta instancia (la que está `busy`) puede cancelar/cerrar: el progreso
+  // es global, así que sin esta condición otra instancia mostraría el botón.
+  const canCancel = busy
 
   const bg = instance.backgroundUrl
   const showBg = !!bg && !bgFailed
@@ -722,7 +727,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 disabled={busy}
                 className="flex-1 rounded-xl bg-tenso-accent py-2.5 font-bold tracking-wide text-white shadow-lg transition-all hover:bg-tenso-accent-soft hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
               >
-                {progress.stage === 'running' ? 'JUGANDO' : busy ? '...' : 'JUGAR'}
+                {busy ? (progress.stage === 'running' ? 'JUGANDO' : '...') : 'JUGAR'}
               </button>
               {canCancel && (
                 <button
