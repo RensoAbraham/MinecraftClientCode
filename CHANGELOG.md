@@ -1,5 +1,18 @@
 # Cambios de Paput Client
 
+## 1.0.21
+
+### Nuevo
+- **Desinstalación completa**: al desinstalar Paput Client ahora puedes borrar también todos los datos (mods, Java descargado, mundos locales y ajustes) para liberar varios GB. Se pregunta antes de borrar.
+- **Gestor de recursos** en el Panel Dev (estilo tarjetas): mods con icono, buscador e interruptor para activar/desactivar, y pestañas para paquetes de recursos y configuraciones.
+
+### Mejorado
+- **Menos espacio en disco**: las instancias ahora **comparten** los archivos pesados (assets, librerías, versiones y el Java) en una sola copia, en vez de duplicarlos por instancia. Ahorra varios GB.
+- **Panel Dev renovado**: fondo más suave, cada instancia es una tarjeta con acciones claras (Recursos, Editar y un menú de más opciones), y una sola tarjeta arriba para crear grupos y configurar la nube (R2). Se quitó la guía "Cómo funciona" y la interfaz quedó más limpia.
+
+### Arreglado
+- La **barra de progreso** ya no desaparecía al ir a Inicio y volver a la instancia mientras se descargaba (antes reaparecía "JUGAR" aunque la descarga siguiera en curso).
+
 ## 1.0.20
 
 ### Nuevo
