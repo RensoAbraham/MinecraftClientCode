@@ -1,5 +1,13 @@
 # Cambios de Paput Client
 
+## 1.0.23
+
+### Nuevo
+- **Eliminar una instancia** desde Ajustes: botón con **doble confirmación** que borra por completo una instancia de tu equipo (mods, mundos y ajustes), no solo de la lista. Sirve para quitar instancias "fantasma" que no se dejan limpiar. Al terminar, si no te queda ninguna, vuelves a la pantalla de poner el código.
+
+### Arreglado
+- **Tailscale (modo automático)**: ahora se conecta con permisos de administrador (sale el aviso de Windows/UAC), que es lo que hacía falta para que funcionara. Además dejó de mostrar la clave en los mensajes de error.
+
 ## 1.0.22
 
 ### Mejorado
