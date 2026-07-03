@@ -62,7 +62,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Paput Client"
+      "shortcutName": "Paput Client",
+      "include": "build/installer.nsh"
     }
   },
   "dependencies": {
