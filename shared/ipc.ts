@@ -208,6 +208,8 @@ export interface TensoApi {
   getInstances(): Promise<Instance[]>
   /** Elimina un grupo desbloqueado (y todas sus instancias). */
   removeGroup(groupId: string): Promise<void>
+  /** Elimina una instancia por completo: quita el grupo Y borra sus archivos del disco. */
+  removeInstance(groupId: string): Promise<void>
   /**
    * Deja que la jugadora elija su propia imagen de instancia (se guarda en su
    * equipo y reemplaza a la del dev). Devuelve la instancia ya actualizada, o
@@ -395,6 +397,7 @@ export const IPC = {
   redeemCode: 'tenso:redeemCode',
   getInstances: 'tenso:getInstances',
   removeGroup: 'tenso:removeGroup',
+  removeInstance: 'tenso:removeInstance',
   customizeInstanceImage: 'tenso:customizeInstanceImage',
   customizeInstanceBackground: 'tenso:customizeInstanceBackground',
   resetInstanceCustomization: 'tenso:resetInstanceCustomization',

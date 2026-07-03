@@ -282,6 +282,11 @@ export default function App() {
           onShowGuide={() => setShowGuide(true)}
           theme={theme}
           onSetTheme={changeTheme}
+          groups={groups.map((g) => ({ groupId: g.groupId, name: g.group }))}
+          onRemoved={() => {
+            setSelectedGroupId(null)
+            refreshInstances()
+          }}
         />
       )}
       {showAccounts && (

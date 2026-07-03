@@ -186,6 +186,11 @@ export function getInstance(id: string): Instance | null {
   return null
 }
 
+/** Ids de las instancias (cacheadas) de un grupo, para poder borrar sus datos. */
+export function groupInstanceIds(groupId: string): string[] {
+  return loadStore().find((g) => g.groupId === groupId)?.cached.map((i) => i.id) ?? []
+}
+
 /** Elimina un grupo desbloqueado (y todas sus instancias). */
 export async function removeGroup(groupId: string): Promise<void> {
   const store = loadStore()

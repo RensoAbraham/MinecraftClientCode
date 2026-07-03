@@ -7,14 +7,21 @@ interface SettingsProps {
   /** Tema actual y función para cambiarlo (se aplica al instante). */
   theme: 'dark' | 'light'
   onSetTheme: (theme: 'dark' | 'light') => void
+  /** Instancias desbloqueadas (por grupo), para poder eliminarlas. */
+  groups: { groupId: string; name: string }[]
+  /** Se llama tras eliminar una instancia (para refrescar la lista). */
+  onRemoved: () => void
 }
 
 /**
  * Ajustes GLOBALES de la app: tema y "más opciones" (Java, caché, guía).
  * La RAM y el auto-join son por INSTANCIA (en la tuerca al lado de JUGAR).
  */
-export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsProps) {
+export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRemoved }: SettingsProps) {
   const [cacheState, setCacheState] = useState<'idle' | 'clearing' | 'done'>('idle')
+  // Confirmación (en dos pasos) para eliminar una instancia.
+  const [confirm, setConfirm] = useState<{ groupId: string; name: string; step: 1 | 2 } | null>(null)
+  const [removing, setRemoving] = useState(false)
   const [storage, setStorage] = useState<{ total: number; items: { name: string; bytes: number }[] } | null>(null)
   const [loadingStorage, setLoadingStorage] = useState(false)
   const [java, setJava] = useState<{ installed: boolean; version?: string; error?: string } | null>(null)
@@ -56,6 +63,19 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
     bytes >= 1024 * 1024 * 1024
       ? `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
       : `${Math.round(bytes / 1024 / 1024)} MB`
+
+  async function doRemove() {
+    if (!confirm) return
+    setRemoving(true)
+    try {
+      await window.tenso.removeInstance(confirm.groupId)
+    } finally {
+      setRemoving(false)
+      setConfirm(null)
+      onClose()
+      onRemoved()
+    }
+  }
 
   async function handleClearCache() {
     setCacheState('clearing')
@@ -235,6 +255,30 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
             </div>
         </div>
 
+        {/* --- Eliminar instancia (zona de peligro) --- */}
+        {groups.length > 0 && (
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
+            <p className="mb-1 text-xs font-bold tracking-wide text-red-300/90 uppercase">Eliminar instancia</p>
+            <p className="mb-3 text-xs text-tenso-muted">
+              Borra por completo una instancia de tu equipo (mods, mundos y ajustes). Útil si quedó
+              rota o "fantasma" y no se deja limpiar. Tendrás que volver a poner su código para recuperarla.
+            </p>
+            <div className="space-y-2">
+              {groups.map((g) => (
+                <div key={g.groupId} className="flex items-center justify-between gap-2 rounded-lg border border-tenso-border bg-tenso-panel-2 p-2.5">
+                  <span className="truncate text-sm font-medium">{g.name}</span>
+                  <button
+                    onClick={() => setConfirm({ groupId: g.groupId, name: g.name, step: 1 })}
+                    className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/15"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* --- Acerca de --- */}
         <div className="mt-6 border-t border-tenso-border pt-4">
           <div className="flex items-center justify-between">
@@ -262,6 +306,47 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme }: SettingsPr
             </div>
           </div>
         </div>
+
+        {/* Confirmación EN DOS PASOS para eliminar una instancia */}
+        {confirm && (
+          <div className="fixed inset-0 z-[60] grid place-items-center bg-black/70 p-4" onClick={() => !removing && setConfirm(null)}>
+            <div className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-red-500/40 bg-tenso-panel p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              {confirm.step === 1 ? (
+                <>
+                  <h3 className="text-base font-bold">Eliminar "{confirm.name}"</h3>
+                  <p className="mt-2 text-sm text-tenso-muted">
+                    Se borrarán del todo los <strong className="text-tenso-text">mods, mundos y ajustes</strong> de esta
+                    instancia en tu equipo. Esto no se puede deshacer.
+                  </p>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <button onClick={() => setConfirm(null)} className="rounded-lg border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text">
+                      Cancelar
+                    </button>
+                    <button onClick={() => setConfirm({ ...confirm, step: 2 })} className="rounded-lg bg-red-500/80 px-4 py-2 text-sm font-bold text-white hover:bg-red-500">
+                      Continuar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base font-bold text-red-300">¿Seguro del todo?</h3>
+                  <p className="mt-2 text-sm text-tenso-muted">
+                    Última confirmación. Para volver a tener <strong className="text-tenso-text">{confirm.name}</strong>{' '}
+                    tendrás que poner su código otra vez.
+                  </p>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <button onClick={() => setConfirm(null)} disabled={removing} className="rounded-lg border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text disabled:opacity-60">
+                      Cancelar
+                    </button>
+                    <button onClick={doRemove} disabled={removing} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
+                      {removing ? 'Eliminando…' : 'Sí, eliminar'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

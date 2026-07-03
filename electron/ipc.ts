@@ -7,6 +7,7 @@ import {
   cancelLaunch,
   repairInstance,
   deepClean,
+  deleteInstanceData,
   uploadLog,
   openGameLogs,
   storageUsage,
@@ -42,6 +43,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
   ipcMain.handle(IPC.redeemCode, (_e, code: string) => instances.redeemCode(code))
   ipcMain.handle(IPC.getInstances, () => instances.getInstances())
   ipcMain.handle(IPC.removeGroup, (_e, groupId: string) => instances.removeGroup(groupId))
+  // Eliminar instancia por completo: borra los archivos del juego de cada
+  // instancia del grupo (incluye "fantasmas" rotas) y luego quita el grupo.
+  ipcMain.handle(IPC.removeInstance, async (_e, groupId: string) => {
+    for (const id of instances.groupInstanceIds(groupId)) deleteInstanceData(id)
+    await instances.removeGroup(groupId)
+  })
   ipcMain.handle(IPC.customizeInstanceImage, (_e, id: string) =>
     instances.customizeImage(getWindow(), id),
   )

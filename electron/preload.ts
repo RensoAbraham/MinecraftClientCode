@@ -7,6 +7,7 @@ const api: TensoApi = {
   redeemCode: (code) => ipcRenderer.invoke(IPC.redeemCode, code),
   getInstances: () => ipcRenderer.invoke(IPC.getInstances),
   removeGroup: (groupId) => ipcRenderer.invoke(IPC.removeGroup, groupId),
+  removeInstance: (groupId) => ipcRenderer.invoke(IPC.removeInstance, groupId),
   customizeInstanceImage: (instanceId) => ipcRenderer.invoke(IPC.customizeInstanceImage, instanceId),
   customizeInstanceBackground: (instanceId) =>
     ipcRenderer.invoke(IPC.customizeInstanceBackground, instanceId),

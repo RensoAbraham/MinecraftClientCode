@@ -155,6 +155,20 @@ export function deepClean(instanceId: string, onProgress?: CleanProgress): void 
 }
 
 /**
+ * Borra POR COMPLETO la carpeta de una instancia (mods, mundos, ajustes, todo).
+ * Se usa al eliminar una instancia del cliente (incluye instancias "fantasma"
+ * que quedaron rotas y no se dejan limpiar). Mata el juego antes por si acaso.
+ */
+export function deleteInstanceData(instanceId: string): void {
+  killGameProcesses()
+  try {
+    fs.rmSync(instanceDir(instanceId), { recursive: true, force: true })
+  } catch {
+    /* no existe o en uso: no es crítico */
+  }
+}
+
+/**
  * Aplica el `options.txt` por defecto del modpack SOLO la primera vez (si el
  * jugador aún no tiene uno). Después, sus ajustes (teclas, sensibilidad, FOV…)
  * se respetan: `options.txt` no va en el manifiesto y eml-lib lo ignora al limpiar.
