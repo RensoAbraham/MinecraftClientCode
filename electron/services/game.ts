@@ -31,12 +31,43 @@ function slugFor(instanceId: string): string {
 }
 
 /**
- * Carpeta propia de cada instancia: `.tensoclient/<slug>`. Cada instancia tiene
- * su instalación completa, así cambiar entre HIGH/LOW es instantáneo (solo
- * verifica actualizaciones) y la limpieza afecta solo a esa instancia.
+ * Carpeta propia de cada instancia: `.tensoclient/<slug>`. En el modo COMPARTIDO
+ * aquí viven solo `mods`, `config` y `saves`; los assets/librerías/versions/Java
+ * se comparten en la raíz `.tensoclient/`.
  */
 function instanceDir(instanceId: string): string {
   return path.join(GAME_ROOT, slugFor(instanceId))
+}
+
+/** Carpetas pesadas que en el modo COMPARTIDO viven una sola vez en la raíz. */
+const SHARED_FOLDERS = ['assets', 'libraries', 'versions', 'runtime'] as const
+
+/**
+ * Migra una instancia del layout AISLADO (cada una con su copia completa) al
+ * COMPARTIDO. Por cada carpeta pesada: si la raíz aún no la tiene, PROMUEVE la
+ * de la instancia a la raíz (renombrar es instantáneo y evita re-descargar); si
+ * la raíz ya la tiene, la de la instancia es un duplicado y se borra. `bin`
+ * (natives) se regenera, así que se elimina siempre. Conserva mods/config/saves.
+ * Idempotente: si ya está migrada, no hace nada.
+ */
+function migrateSharedLayout(instanceId: string): void {
+  const dir = instanceDir(instanceId)
+  for (const name of SHARED_FOLDERS) {
+    const src = path.join(dir, name)
+    if (!fs.existsSync(src)) continue
+    const dest = path.join(GAME_ROOT, name)
+    try {
+      if (!fs.existsSync(dest)) fs.renameSync(src, dest) // promueve a la raíz
+      else fs.rmSync(src, { recursive: true, force: true }) // duplicado → borra
+    } catch {
+      /* en uso o carrera: no es crítico, se reintenta en el próximo lanzamiento */
+    }
+  }
+  try {
+    fs.rmSync(path.join(dir, 'bin'), { recursive: true, force: true })
+  } catch {
+    /* no crítico */
+  }
 }
 
 /**
@@ -351,11 +382,17 @@ export async function launchGame({
       ? ['--quickPlayMultiplayer', instance.serverAddress]
       : []
 
+  // Antes de lanzar: migra esta instancia al layout COMPARTIDO (borra sus copias
+  // duplicadas de assets/librerías/Java, que ahora viven una sola vez en la raíz).
+  migrateSharedLayout(instance.id)
+
   const launcher = new Launcher({
     root: 'tensoclient', // -> .tensoclient (oculto) en Windows
-    storage: 'isolated',
-    // Cada instancia en su propia subcarpeta `.tensoclient/<slug>`: cambiar de
-    // tipo (HIGH/LOW) es instantáneo y la limpieza/reparación es por instancia.
+    storage: 'shared',
+    // Modo COMPARTIDO: assets, librerías, versions y el Java (runtime) se guardan
+    // una sola vez en la raíz `.tensoclient/` y todas las instancias los usan;
+    // solo `mods`, `config` y `saves` quedan por instancia en `.tensoclient/<slug>`.
+    // Así no se duplican varios GB por cada instancia.
     profile: { slug: slugFor(instance.id) },
     account,
     minecraft: {
@@ -369,9 +406,11 @@ export async function launchGame({
       modpackUrl: instance.modpackUrl,
       args: gameArgs,
     },
-    // Auto-reparación: elimina archivos no reconocidos del modpack y vuelve a
-    // descargar los que falten o estén modificados. Protege la integridad.
-    cleaning: { enabled: true },
+    // En modo COMPARTIDO la limpieza automática DEBE ir desactivada: si no, al
+    // lanzar una instancia borraría los assets/librerías compartidos y los mods
+    // de las demás instancias. Contrapartida: un mod que un modpack ELIMINE en
+    // una actualización no se borra solo; para eso está el botón "Reparar".
+    cleaning: { enabled: false },
     java: { install: 'auto' }, // descarga el JRE correcto automáticamente
     memory: { min: 1024, max: maxRamMb },
     window: { width: 1280, height: 720 },
