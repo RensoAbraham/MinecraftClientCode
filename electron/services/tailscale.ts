@@ -76,15 +76,40 @@ export async function connect(authKey: string): Promise<{ ok: boolean; message: 
     }
   }
 
-  // 2) Conectar con la auth key.
+  // 2) Conectar con la auth key. Primero sin elevar (rápido, y sin UAC si el
+  //    usuario ya puede controlar Tailscale). En Windows el CLI suele necesitar
+  //    permisos de ADMIN, así que si falla se reintenta ELEVADO: eso dispara el
+  //    aviso de UAC que promete la interfaz. Nunca metemos la auth key en los
+  //    mensajes de error (es un secreto).
+  const upArgs = ['up', `--authkey=${authKey}`, '--accept-routes']
   try {
-    await run(exe, ['up', `--authkey=${authKey}`, '--accept-routes'], { timeout: 120000 })
+    await run(exe, upArgs, { timeout: 120000 })
     return { ok: true, message: 'Conectada a Tailscale. Ya puedes jugar.' }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return {
-      ok: false,
-      message: `No se pudo conectar a Tailscale: ${msg}. Si pide permisos, acepta el aviso de Windows (UAC).`,
-    }
+  } catch {
+    /* probablemente necesita administrador: se reintenta elevado abajo */
+  }
+
+  // Reintento ELEVADO vía PowerShell (Start-Process -Verb RunAs dispara el UAC).
+  // Start-Process no captura la salida de Tailscale, así que el resultado se
+  // comprueba después por el estado real.
+  try {
+    const q = (s: string) => `'${s.replace(/'/g, "''")}'`
+    const argList = upArgs.map(q).join(',')
+    await run(
+      'powershell',
+      ['-NoProfile', '-Command', `Start-Process -FilePath ${q(exe)} -Verb RunAs -Wait -ArgumentList ${argList}`],
+      { timeout: 120000 },
+    )
+  } catch {
+    /* UAC cancelado o PowerShell falló: se comprueba el estado abajo */
+  }
+
+  if ((await status()).connected) {
+    return { ok: true, message: 'Conectada a Tailscale. Ya puedes jugar.' }
+  }
+  return {
+    ok: false,
+    message:
+      'No se pudo conectar a Tailscale. Cuando aparezca el aviso de Windows (UAC), pulsa "Sí". Si sigue fallando, la clave puede haber caducado: pídele a Renso una nueva, o usa la opción "Hazlo tú mismo".',
   }
 }
