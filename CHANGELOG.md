@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.22
+
+### Mejorado
+- En el **Panel Dev**, botones más claros para **eliminar** una instancia (botón visible en cada una) y para **añadir** otra (debajo de la lista y cuando el grupo está vacío), para armar fácil tus versiones Low y High.
+
 ## 1.0.21
 
 ### Nuevo
