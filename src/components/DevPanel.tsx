@@ -257,7 +257,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
   )
 
   return (
-    <div className="pixel-grid fixed inset-0 z-50 flex flex-col">
+    <div className="dev-surface fixed inset-0 z-50 flex flex-col">
       {/* Cabecera */}
       <header className="flex items-center justify-between gap-3 border-b border-tenso-border bg-tenso-panel/60 px-6 py-3 backdrop-blur">
         <div className="flex items-center gap-3">

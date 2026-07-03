@@ -75,6 +75,32 @@ textarea {
 }
 
 /*
+  Superficie del Panel Dev: "oscuro suave" (slate con leve tinte morado) en vez
+  del negro casi puro del resto de la app. Se logra REDEFINIENDO las variables
+  de color tenso- solo dentro de este contenedor: como las utilidades de
+  Tailwind usan var(--color-tenso-...), el fondo, las tarjetas y los bordes se
+  reajustan solos, manteniendo la elevación (las cards quedan por encima del
+  fondo). No afecta al resto de la app. Fondo con un leve brillo morado arriba
+  a la derecha y una rejilla muy sutil.
+*/
+.dev-surface {
+  --color-tenso-bg: #171521;
+  --color-tenso-panel: #201c2c;
+  --color-tenso-panel-2: #2a2539;
+  --color-tenso-border: #383150;
+  --color-tenso-muted: #9d93b0;
+  background-color: var(--color-tenso-bg);
+  background-image:
+    radial-gradient(900px 480px at 88% -12%, rgba(166, 77, 252, 0.12), transparent 60%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size:
+    auto,
+    22px 22px,
+    22px 22px;
+}
+
+/*
   Nieve pixelada: cuadraditos blancos que caen muy despacio (con una leve
   deriva lateral) detrás de todo el contenido. Cada copo anima solo transform
   y opacity, por lo que es prácticamente gratis.
