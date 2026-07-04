@@ -1,5 +1,10 @@
 # Cambios de Paput Client
 
+## 1.0.24
+
+### Arreglado
+- **Las instancias con poca RAM ya arrancan bien**: el juego se lanza con los argumentos de Java optimizados (afinado del recolector de basura, las "Aikar flags"), igual que Modrinth. Antes, un pack pesado con 4-5 GB podía tardar muchísimo o directamente no iniciar; ahora corre fluido con la misma RAM.
+
 ## 1.0.23
 
 ### Nuevo
