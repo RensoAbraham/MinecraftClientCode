@@ -71,6 +71,34 @@ function migrateSharedLayout(instanceId: string): void {
 }
 
 /**
+ * "Aikar's flags": afinado estándar de G1GC para modpacks pesados. Sin esto, un
+ * pack de ~300 mods thrashea el recolector de basura al hornear modelos y, con
+ * RAM ajustada (4-5 GB), puede tardar muchísimo o no llegar a iniciar. Es lo que
+ * usan Modrinth y otros launchers, y lo que faltaba para que la instancia LOW
+ * arranque con poca RAM igual que en Modrinth.
+ */
+const AIKAR_FLAGS = [
+  '-XX:+UseG1GC',
+  '-XX:+ParallelRefProcEnabled',
+  '-XX:MaxGCPauseMillis=200',
+  '-XX:+UnlockExperimentalVMOptions',
+  '-XX:+DisableExplicitGC',
+  '-XX:+AlwaysPreTouch',
+  '-XX:G1NewSizePercent=30',
+  '-XX:G1MaxNewSizePercent=40',
+  '-XX:G1HeapRegionSize=8M',
+  '-XX:G1ReservePercent=20',
+  '-XX:G1HeapWastePercent=5',
+  '-XX:G1MixedGCCountTarget=4',
+  '-XX:InitiatingHeapOccupancyPercent=15',
+  '-XX:G1MixedGCLiveThresholdPercent=90',
+  '-XX:G1RSetUpdatingPauseTimePercent=5',
+  '-XX:SurvivorRatio=32',
+  '-XX:+PerfDisableSharedMem',
+  '-XX:MaxTenuringThreshold=1',
+]
+
+/**
  * Mata el proceso de Java del juego. Solo afecta al JRE que vive dentro de
  * `.tensoclient` (el que descarga EML-Lib), nunca a otros Java del sistema.
  */
@@ -425,7 +453,9 @@ export async function launchGame({
     // de las demás instancias. Contrapartida: un mod que un modpack ELIMINE en
     // una actualización no se borra solo; para eso está el botón "Reparar".
     cleaning: { enabled: false },
-    java: { install: 'auto' }, // descarga el JRE correcto automáticamente
+    // Descarga el JRE correcto automáticamente y arranca con las Aikar flags
+    // (afinado de GC) para que un pack pesado corra bien incluso con poca RAM.
+    java: { install: 'auto', args: AIKAR_FLAGS },
     memory: { min: 1024, max: maxRamMb },
     window: { width: 1280, height: 720 },
   })
