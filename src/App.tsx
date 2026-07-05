@@ -1,21 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { InstanceScreen } from './components/InstanceScreen'
 import { AccessGate } from './components/AccessGate'
 import { Login } from './components/Login'
 import { Settings } from './components/Settings'
-import { DevPanel } from './components/DevPanel'
 import { ModeSelect } from './components/ModeSelect'
 import { AccountMenu } from './components/AccountMenu'
-import { SkinEditor } from './components/SkinEditor'
 import { HomeScreen } from './components/HomeScreen'
 import { VariantSelect } from './components/VariantSelect'
 import { ConnectionSelect } from './components/ConnectionSelect'
-import { PreviewMenu } from './components/PreviewMenu'
 import { GuiaRapida } from './components/GuiaRapida'
 import { UpdateBanner } from './components/UpdateBanner'
 import { useProgress } from './hooks/useProgress'
 import type { Account, ConnectionKind, Instance } from '../shared/ipc'
+
+// Cargados EN DIFERIDO (solo al abrirse): el Panel Dev es grande y el editor de
+// skins arrastra skinview3d/Three.js (pesado). Sacarlos del arranque hace que la
+// app abra más rápido y gaste menos para el jugador que nunca los usa.
+const DevPanel = lazy(() => import('./components/DevPanel').then((m) => ({ default: m.DevPanel })))
+const SkinEditor = lazy(() => import('./components/SkinEditor').then((m) => ({ default: m.SkinEditor })))
+const PreviewMenu = lazy(() => import('./components/PreviewMenu').then((m) => ({ default: m.PreviewMenu })))
 
 type Mode = 'select' | 'dev' | 'player'
 
@@ -192,7 +196,12 @@ export default function App() {
   if (mode === 'select') {
     return <ModeSelect onDev={() => setMode('dev')} onPlayer={() => setMode('player')} />
   }
-  if (mode === 'dev') return <DevPanel onClose={() => setMode('select')} />
+  if (mode === 'dev')
+    return (
+      <Suspense fallback={<div className="pixel-grid h-full w-full" />}>
+        <DevPanel onClose={() => setMode('select')} />
+      </Suspense>
+    )
 
   const backToSelect = isDev ? () => setMode('select') : undefined
   if (instances.length === 0) return <AccessGate onUnlock={handleUnlock} onOpenDev={backToSelect} />
@@ -295,10 +304,18 @@ export default function App() {
           onChanged={() => window.tenso.getAccount().then(setAccount).catch(() => {})}
         />
       )}
-      {showSkin && account && <SkinEditor account={account} onClose={() => setShowSkin(false)} />}
+      {showSkin && account && (
+        <Suspense fallback={null}>
+          <SkinEditor account={account} onClose={() => setShowSkin(false)} />
+        </Suspense>
+      )}
       {adding && <AccessGate onUnlock={handleUnlock} onCancel={() => setAdding(false)} />}
 
-      {showPreviews && <PreviewMenu onClose={() => setShowPreviews(false)} />}
+      {showPreviews && (
+        <Suspense fallback={null}>
+          <PreviewMenu onClose={() => setShowPreviews(false)} />
+        </Suspense>
+      )}
       {showGuide && <GuiaRapida onClose={closeGuide} />}
     </div>
   )
