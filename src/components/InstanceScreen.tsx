@@ -29,11 +29,10 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const [paused, setPaused] = useState(() => localStorage.getItem('paput.bgPaused') === '1')
   const [volume, setVolume] = useState(() => {
     const v = localStorage.getItem('paput.bgVolume')
-    return v != null ? Number(v) : 0.4
+    return v != null ? Number(v) : 0 // por defecto en silencio (ahorra recursos)
   })
   const [confirmRepair, setConfirmRepair] = useState(false)
   const [confirmDeep, setConfirmDeep] = useState(false)
-  const [cancelCleanup, setCancelCleanup] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportCrashed, setReportCrashed] = useState(false)
   const [reporting, setReporting] = useState(false)
@@ -67,12 +66,6 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
 
   // Progreso de la limpieza/reparación (barra).
   useEffect(() => window.tenso.onCleanProgress(setCleanProg), [])
-
-  // Aviso de instalación cancelada a media → ofrecer limpiar (solo esta instancia).
-  useEffect(
-    () => window.tenso.onInstallCancelled((id) => { if (id === instance.id) setCancelCleanup(true) }),
-    [instance.id],
-  )
 
   // El juego crasheó → ofrecer reportar el error (solo esta instancia).
   useEffect(
@@ -120,6 +113,20 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
       else v.play().catch(() => {})
     }
     localStorage.setItem('paput.bgPaused', paused ? '1' : '0')
+  }, [paused])
+
+  // Cuando la ventana se oculta (minimizada a la bandeja al jugar, u otra
+  // pestaña), PAUSA el vídeo de fondo: deja de decodificar y de sonar, así no
+  // gasta CPU/GPU en segundo plano. Al volver, reanuda si el jugador no lo pausó.
+  useEffect(() => {
+    const onVisibility = () => {
+      const v = videoRef.current
+      if (!v) return
+      if (document.hidden) v.pause()
+      else if (!paused) v.play().catch(() => {})
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [paused])
 
   const isWorking = busy && progress.stage !== 'idle' && progress.stage !== 'running'
@@ -569,37 +576,6 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                   {reporting ? 'Subiendo…' : reportUrl ? 'Crear de nuevo' : 'Crear enlace'}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Aviso tras cancelar una instalación a media */}
-      {cancelCleanup && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setCancelCleanup(false)}>
-          <div
-            className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold">Instalación cancelada</h2>
-            <p className="mt-2 text-sm text-tenso-muted">
-              Cancelaste la instalación, pero la descarga ya en curso no se puede detener al instante y
-              pudo dejar <span className="text-tenso-text">archivos a medias</span>. ¿Quieres limpiar la
-              instancia para que la próxima instalación empiece limpia?
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => setCancelCleanup(false)}
-                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
-              >
-                Ahora no
-              </button>
-              <button
-                onClick={() => { setCancelCleanup(false); handleRepair() }}
-                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
-              >
-                Limpiar
-              </button>
             </div>
           </div>
         </div>
