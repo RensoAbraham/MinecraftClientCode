@@ -1,5 +1,18 @@
 # Cambios de Paput Client
 
+## 1.0.26
+
+### Arreglado
+- **Las instancias ya arrancan con el minimapa (Xaero) y todos los mods**: había un cuelgue permanente en la pantalla de carga (se quedaba clavada tras preparar los modelos, sin error). Era un bloqueo por concurrencia al hornear los modelos en paralelo cuando estaba el minimapa. Ahora el horneado va en un solo hilo, lo que evita el bloqueo sin quitar ningún mod. Contrapartida: el primer arranque tarda un poco más.
+
+### Mejorado
+- **Arranque más rápido de la app**: se cargan en diferido el Editor de Skins, el Panel Dev y el menú de previsualización, en vez de todo al abrir.
+- **Argumentos de Java afinados por RAM**: la instancia Low usa un perfil de recolector de basura pensado para poca memoria (sin reservar todo el heap por adelantado), para no empujar al archivo de paginación en equipos de 8 GB.
+
+### Arreglado (otros)
+- El aviso de "Instalación cancelada" ya no salta al cerrar el juego de golpe.
+- El vídeo de fondo se silencia/pausa al minimizar, para no gastar recursos en segundo plano.
+
 ## 1.0.24
 
 ### Arreglado

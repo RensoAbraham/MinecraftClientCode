@@ -71,32 +71,66 @@ function migrateSharedLayout(instanceId: string): void {
 }
 
 /**
- * "Aikar's flags": afinado estándar de G1GC para modpacks pesados. Sin esto, un
- * pack de ~300 mods thrashea el recolector de basura al hornear modelos y, con
- * RAM ajustada (4-5 GB), puede tardar muchísimo o no llegar a iniciar. Es lo que
- * usan Modrinth y otros launchers, y lo que faltaba para que la instancia LOW
- * arranque con poca RAM igual que en Modrinth.
+ * Afinado de G1GC para modpacks pesados. Sin esto, un pack de ~300 mods thrashea
+ * el recolector de basura al hornear modelos.
+ *
+ * IMPORTANTE: las "Aikar's flags" clásicas son perfil de SERVIDOR con RAM holgada
+ * y con heaps ajustados (LOW, ~4.5 GB en equipos de 8 GB) juegan EN CONTRA:
+ *   - AlwaysPreTouch fuerza a residir en RAM todo el heap al arrancar; en 8 GB
+ *     empuja parte al pagefile y, una vez el heap toca disco, cada GC va a disco
+ *     y el juego avanza "un evento por minuto" (cuelgue en el horneado de modelos).
+ *   - G1MaxNewSizePercent=40 + G1ReservePercent=20 dejan poco old-gen, que es
+ *     justo donde viven los modelos horneados.
+ *   - InitiatingHeapOccupancyPercent=15 dispara GC constante desde el 15%.
+ * Por eso escalamos: Aikar completo solo cuando hay RAM de sobra; perfil ligero
+ * (sin AlwaysPreTouch, young-gen menor, GC menos agresivo) para heaps ajustados.
  */
-const AIKAR_FLAGS = [
-  '-XX:+UseG1GC',
-  '-XX:+ParallelRefProcEnabled',
-  '-XX:MaxGCPauseMillis=200',
-  '-XX:+UnlockExperimentalVMOptions',
-  '-XX:+DisableExplicitGC',
-  '-XX:+AlwaysPreTouch',
-  '-XX:G1NewSizePercent=30',
-  '-XX:G1MaxNewSizePercent=40',
-  '-XX:G1HeapRegionSize=8M',
-  '-XX:G1ReservePercent=20',
-  '-XX:G1HeapWastePercent=5',
-  '-XX:G1MixedGCCountTarget=4',
-  '-XX:InitiatingHeapOccupancyPercent=15',
-  '-XX:G1MixedGCLiveThresholdPercent=90',
-  '-XX:G1RSetUpdatingPauseTimePercent=5',
-  '-XX:SurvivorRatio=32',
-  '-XX:+PerfDisableSharedMem',
-  '-XX:MaxTenuringThreshold=1',
-]
+function jvmFlags(maxRamMb: number): string[] {
+  const base = [
+    '-XX:+UseG1GC',
+    '-XX:+ParallelRefProcEnabled',
+    '-XX:MaxGCPauseMillis=200',
+    '-XX:+UnlockExperimentalVMOptions',
+    '-XX:+DisableExplicitGC',
+    '-XX:G1HeapRegionSize=8M',
+    '-XX:G1HeapWastePercent=5',
+    '-XX:G1MixedGCCountTarget=4',
+    '-XX:G1MixedGCLiveThresholdPercent=90',
+    '-XX:G1RSetUpdatingPauseTimePercent=5',
+    '-XX:SurvivorRatio=32',
+    '-XX:+PerfDisableSharedMem',
+    '-XX:MaxTenuringThreshold=1',
+    // Horneado de modelos en UN SOLO hilo (ambos perfiles, Low y High): con este
+    // pack + Xaero's Minimap hay un DEADLOCK en el horneado en paralelo (varios
+    // mods se traban entre sí y el arranque se queda colgado tras "baking models",
+    // sin error). Serializar los dos pools —el de fondo de MC y el ForkJoinPool
+    // común que usa ModernFix— evita el deadlock sin quitar mods. Contrapartida:
+    // el primer arranque tarda algo más (hornea en serie).
+    '-Dmax.bg.threads=1',
+    '-Djava.util.concurrent.ForkJoinPool.common.parallelism=1',
+  ]
+  if (maxRamMb >= 6144) {
+    // RAM holgada: Aikar completo. AlwaysPreTouch y young-gen grande rinden mejor.
+    return [
+      ...base,
+      '-XX:+AlwaysPreTouch',
+      '-XX:G1NewSizePercent=30',
+      '-XX:G1MaxNewSizePercent=40',
+      '-XX:G1ReservePercent=20',
+      '-XX:InitiatingHeapOccupancyPercent=15',
+    ]
+  }
+  // Heap ajustado (LOW): sin AlwaysPreTouch (no fuerza todo el heap en RAM ni
+  // empuja al pagefile en equipos de 8 GB) y young-gen menor para dejar sitio al
+  // old-gen; GC menos agresivo (IHOP más alto) para no reciclar sin parar.
+  return [
+    ...base,
+    '-XX:G1NewSizePercent=20',
+    '-XX:G1MaxNewSizePercent=30',
+    '-XX:G1ReservePercent=15',
+    '-XX:InitiatingHeapOccupancyPercent=25',
+  ]
+}
 
 /**
  * Mata el proceso de Java del juego. Solo afecta al JRE que vive dentro de
@@ -453,9 +487,10 @@ export async function launchGame({
     // de las demás instancias. Contrapartida: un mod que un modpack ELIMINE en
     // una actualización no se borra solo; para eso está el botón "Reparar".
     cleaning: { enabled: false },
-    // Descarga el JRE correcto automáticamente y arranca con las Aikar flags
-    // (afinado de GC) para que un pack pesado corra bien incluso con poca RAM.
-    java: { install: 'auto', args: AIKAR_FLAGS },
+    // Descarga el JRE correcto automáticamente y arranca con el afinado de GC
+    // escalado según la RAM (Aikar completo con RAM holgada; perfil ligero para
+    // heaps ajustados como LOW, ver jvmFlags) para que el pack pesado arranque.
+    java: { install: 'auto', args: jvmFlags(maxRamMb) },
     memory: { min: 1024, max: maxRamMb },
     window: { width: 1280, height: 720 },
   })
