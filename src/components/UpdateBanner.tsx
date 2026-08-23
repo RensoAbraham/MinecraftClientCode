@@ -40,9 +40,18 @@ export function UpdateBanner() {
         )}
 
         {status.state === 'downloading' && (
-          <span className="text-sm text-tenso-muted">
-            Descargando actualización… {status.percent ?? 0}%
-          </span>
+          <div className="min-w-[220px]">
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="text-tenso-text">Descargando actualización…</span>
+              <span className="text-tenso-muted">{status.percent ?? 0}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-tenso-panel-2">
+              <div
+                className="h-full rounded-full bg-tenso-accent transition-[width] duration-300"
+                style={{ width: `${status.percent ?? 0}%` }}
+              />
+            </div>
+          </div>
         )}
 
         {status.state === 'downloaded' && (

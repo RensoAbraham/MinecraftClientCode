@@ -130,6 +130,9 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   }, [paused])
 
   const isWorking = busy && progress.stage !== 'idle' && progress.stage !== 'running'
+  // El juego arrancó pero aún carga (mods/horneado/atlas): fracción < 1 en 'running'.
+  const isLoadingGame = busy && progress.stage === 'running' && progress.fraction < 1
+  const showProgress = isWorking || isLoadingGame
 
   async function handlePlay() {
     if (busy) return
@@ -665,18 +668,9 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </span>
               )}
             </h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-tenso-muted">
-              <span>{instance.loader.toUpperCase()} {instance.mcVersion}</span>
-              {connection && (
-                <span className="rounded bg-tenso-panel-2 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-tenso-accent-soft">
-                  {connection.toUpperCase()}
-                </span>
-              )}
-            </p>
-
             {/* Barra de progreso / estado (vacío cuando está listo) */}
             <div className="mt-3 empty:hidden">
-              {isWorking ? (
+              {showProgress ? (
                 <div>
                   <div className="mb-1.5 flex justify-between text-xs">
                     <span className="anim-pulse text-tenso-text">{progress.label}</span>
@@ -693,7 +687,12 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </div>
               ) : error ? (
                 <span className="text-sm break-words text-tenso-accent-soft">{error}</span>
-              ) : null}
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs text-tenso-muted">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-tenso-accent shadow-[0_0_6px_rgba(166,77,252,0.7)]" />
+                  Listo para jugar
+                </span>
+              )}
             </div>
 
             <div className="mt-3 flex gap-2">
@@ -701,9 +700,15 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 data-tour="play"
                 onClick={handlePlay}
                 disabled={busy}
-                className="flex-1 rounded-xl bg-tenso-accent py-2.5 font-bold tracking-wide text-white shadow-lg transition-all hover:bg-tenso-accent-soft hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+                className="flex-1 rounded-xl bg-gradient-to-r from-tenso-accent to-tenso-accent-soft py-2.5 font-bold tracking-wide text-white shadow-lg shadow-tenso-accent/30 transition-all hover:scale-[1.02] hover:shadow-tenso-accent/50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none disabled:hover:scale-100"
               >
-                {busy ? (progress.stage === 'running' ? 'JUGANDO' : '...') : 'JUGAR'}
+                {busy
+                  ? progress.stage === 'running'
+                    ? progress.fraction < 1
+                      ? 'CARGANDO'
+                      : 'JUGANDO'
+                    : '...'
+                  : 'JUGAR'}
               </button>
               {canCancel && (
                 <button

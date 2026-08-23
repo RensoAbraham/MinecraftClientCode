@@ -122,8 +122,20 @@ export async function importMrpack(
     properties: ['openFile'],
   })
   if (picked.canceled || picked.filePaths.length === 0) return null
-  const mrpackPath = picked.filePaths[0]
+  return importMrpackFromPath(picked.filePaths[0], modpackRoot, groupId, onProgress)
+}
 
+/**
+ * Importa un .mrpack desde una RUTA concreta (sin diálogo). Separado del diálogo
+ * para poder reutilizarlo y testearlo de forma programática (p. ej. verificar que
+ * el HIGH se integra bien cuando lo exportes de Modrinth).
+ */
+export async function importMrpackFromPath(
+  mrpackPath: string,
+  modpackRoot: string,
+  groupId: string,
+  onProgress?: ImportProgress,
+): Promise<MrImportResult> {
   onProgress?.({ label: 'Descomprimiendo el modpack…', fraction: -1 })
 
   // Descomprime a una carpeta temporal.

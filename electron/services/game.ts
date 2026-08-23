@@ -146,6 +146,64 @@ function killGameProcesses(): void {
   }
 }
 
+// --- Feedback de carga EN VIVO del juego ---------------------------------
+// Entre "arrancó la JVM" y "apareció el menú" hay minutos de carga (mods,
+// horneado de modelos, atlas de texturas) que antes no se veían: parecía
+// colgado. Leemos el log del juego y traducimos sus hitos a etiquetas claras.
+
+/** Hitos del arranque del juego -> etiqueta amigable + fracción aproximada. */
+const LOAD_MARKERS: { re: RegExp; label: string; fraction: number }[] = [
+  { re: /Backend library: LWJGL|Setting user:|OpenAL initialized|LWJGL version/, label: 'Iniciando motor grafico', fraction: 0.2 },
+  { re: /Reloading ResourceManager|Applying holder|SoundManager/, label: 'Cargando recursos', fraction: 0.35 },
+  { re: /Modifying unbaked models|ModifyBakingResult|ModelBakery|Baking/, label: 'Horneando modelos (esto tarda)', fraction: 0.6 },
+  { re: /textures\/atlas|SpriteLoader|Stitching|Created: \d+x\d+/, label: 'Preparando texturas', fraction: 0.8 },
+  { re: /Connecting to|Negotiating|Joining/, label: 'Entrando al servidor', fraction: 0.95 },
+]
+/** Marca de que ya llegamos al menu: cortamos el watcher. */
+const LOAD_DONE = /Sound engine started|Narrator library|Reloading SoundManager/
+
+let loadWatcher: NodeJS.Timeout | null = null
+
+/** Arranca el lector del log del juego y emite progreso hasta llegar al menu. */
+function startLoadWatcher(onProgress: (p: Progress) => void): void {
+  stopLoadWatcher()
+  const logPath = path.join(GAME_ROOT, 'logs', 'latest.log')
+  let reached = 0 // fracción máxima alcanzada (progreso monótono)
+  const startedAt = Date.now()
+  loadWatcher = setInterval(() => {
+    let text: string
+    try {
+      text = fs.readFileSync(logPath, 'utf8')
+    } catch {
+      return // el log aún no existe
+    }
+    // Solo miramos el log de ESTE arranque (evita marcas de runs viejos).
+    if (fs.statSync(logPath).mtimeMs < startedAt - 5000) return
+    if (LOAD_DONE.test(text)) {
+      onProgress({ stage: 'running', fraction: 1, label: 'Jugando' })
+      stopLoadWatcher()
+      return
+    }
+    // La última marca que aparezca (más avanzada) manda.
+    let best: { label: string; fraction: number } | null = null
+    for (const m of LOAD_MARKERS) {
+      if (m.re.test(text) && (!best || m.fraction > best.fraction)) best = m
+    }
+    if (best && best.fraction >= reached) {
+      reached = best.fraction
+      onProgress({ stage: 'running', fraction: best.fraction, label: best.label })
+    }
+  }, 1200)
+}
+
+/** Detiene el lector del log del juego. */
+function stopLoadWatcher(): void {
+  if (loadWatcher) {
+    clearInterval(loadWatcher)
+    loadWatcher = null
+  }
+}
+
 /** Cuenta (rápido) los archivos dentro de una ruta, para ponderar el progreso. */
 function countFilesIn(p: string): number {
   let n = 0
@@ -388,6 +446,7 @@ let active: { cancelled: boolean; onProgress: (p: Progress) => void; onGameClose
 
 /** Cancela la preparación/lanzamiento en curso y mata el juego si está abierto. */
 export function cancelLaunch(): void {
+  stopLoadWatcher()
   if (!active) {
     killGameProcesses() // por si quedó algo colgado
     return
@@ -553,11 +612,16 @@ export async function launchGame({
       killGameProcesses()
       return
     }
-    onProgress({ stage: 'running', fraction: 1, label: 'Jugando' })
+    // La JVM arrancó pero el juego tardará en llegar al menú (mods, horneado,
+    // atlas). Mostramos ese progreso en vivo leyendo el log en vez de saltar a
+    // "Jugando" de golpe (así no parece colgado).
+    onProgress({ stage: 'running', fraction: 0.1, label: 'Cargando el juego' })
+    startLoadWatcher(onProgress)
     onGameLaunched?.()
   })
   // El juego se ha cerrado: volvemos al estado inicial y restauramos el launcher.
   launcher.on('launch_close', (code) => {
+    stopLoadWatcher()
     onProgress({ stage: 'idle', fraction: 0, label: '' })
     onGameClosed?.()
     // Crash = código de salida ≠ 0 y, además, Minecraft dejó un crash-report

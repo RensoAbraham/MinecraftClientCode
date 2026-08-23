@@ -36,3 +36,6 @@ public/README.md
 *.log
 .DS_Store
 Thumbs.db
+
+# Herramientas locales de Claude (skills clonados, memoria) fuera del repo
+.claude/

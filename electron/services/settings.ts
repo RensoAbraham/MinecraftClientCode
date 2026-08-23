@@ -42,6 +42,24 @@ export function systemRamMb(): number {
 }
 
 /**
+ * RAM recomendada por defecto para el juego, según la RAM del equipo. Este pack
+ * es pesado (~300 mods) y necesita ~6 GB para hornear todo sin ahogar el GC; a la
+ * vez hay que dejar margen para Windows + el launcher + overhead nativo del juego.
+ * Reservamos ~3 GB y redondeamos a 512 MB, con suelo 5 GB y techo 8 GB (a MC no le
+ * sirve de mucho más). En equipos de 8 GB da ~5 GB (ajustado pero es lo máximo
+ * seguro); de 16 GB o más, 8 GB.
+ */
+export function autoRamMb(): number {
+  const sys = systemRamMb()
+  // Reservamos ~3.5 GB para Windows + el launcher + la memoria NATIVA del juego
+  // (metaspace, buffers, texturas en RAM), que no cuenta como heap pero sí ocupa.
+  // Así en 8 GB da 4.5 GB (lo máximo seguro sin empujar al disco), y en 16 GB, 8 GB.
+  const reserved = 3584
+  const rec = Math.round((sys - reserved) / 512) * 512
+  return Math.min(8192, Math.max(4608, rec))
+}
+
+/**
  * Ajustes EFECTIVOS de una instancia: usa los propios si los tiene, y si no, el
  * valor global como predeterminado. Así cada instancia puede tener su RAM/auto-join.
  */
@@ -52,8 +70,16 @@ export function getInstanceSettings(instanceId: string): {
 } {
   const s = getSettings()
   const own = s.instanceSettings?.[instanceId] ?? {}
+  // RAM efectiva: prioridad al valor propio de la instancia; si no, el global; si
+  // tampoco, la recomendada según el equipo. Además, a quien se quedó con el viejo
+  // 4 GB por defecto (que NO basta para este pack) y no fijó RAM propia, lo subimos
+  // a la recomendada. Así se arregla solo sin que cada usuario tenga que tocar nada.
+  let maxRamMb = own.maxRamMb ?? s.maxRamMb ?? autoRamMb()
+  if (own.maxRamMb == null && maxRamMb <= 4096) {
+    maxRamMb = Math.max(maxRamMb, autoRamMb())
+  }
   return {
-    maxRamMb: own.maxRamMb ?? s.maxRamMb ?? 4096,
+    maxRamMb,
     autoJoin: own.autoJoin ?? s.autoJoin ?? false,
     systemRamMb: systemRamMb(),
   }
