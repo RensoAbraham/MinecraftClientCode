@@ -43,17 +43,19 @@ local que solo se habilita en el equipo del dueño.
    servidor/arte y publica. Los archivos intactos del pack conservan sus URLs
    verificadas de Modrinth; R2 recibe únicamente overrides, configuración, arte
    y archivos propios.
-2. El dev comparte un **código de grupo** (token con la URL de R2 + id del grupo).
-3. El **jugador** mete el código, inicia sesión con Microsoft o con un nombre no
-   premium y pulsa JUGAR: el
+2. El jugador elige primero su cuenta Microsoft o una identidad offline local.
+3. La referencia de contenido (`TENSO-...`) añade el grupo publicado; solo
+   contiene la ubicación del manifiesto y **no es una credencial de acceso**.
+4. El jugador pulsa JUGAR: el
    launcher descarga/actualiza el modpack desde ambas fuentes y entra al servidor.
 
 La publicación mantiene cada prefijo de R2 como un espejo: elimina archivos
 antiguos que ya no aparecen en el manifiesto, evitando que versiones anteriores
 consuman almacenamiento indefinidamente.
 
-> Los usuarios no premium solo pueden conectarse a servidores configurados para
-> admitir autenticación offline/no premium.
+> El acceso offline actual es provisional y todavía no evita la suplantación de
+> nombres por sí solo. La base para vincular cuentas, dispositivos y el futuro
+> mod de servidor se describe en [AUTH_FOUNDATION.md](./AUTH_FOUNDATION.md).
 
 ## Desarrollo
 

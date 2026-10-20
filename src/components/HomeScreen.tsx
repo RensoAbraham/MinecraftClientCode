@@ -102,7 +102,7 @@ export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) 
         ) : (
           <div className="mt-10 grid place-items-center rounded-2xl border border-dashed border-tenso-border py-12 text-center">
             <p className="text-tenso-muted">Aún no tienes instancias desbloqueadas.</p>
-            <p className="text-sm text-tenso-muted">Pídele a Renso el código del grupo para empezar.</p>
+            <p className="text-sm text-tenso-muted">Pídele a Renso la referencia del modpack para empezar.</p>
           </div>
         )}
 

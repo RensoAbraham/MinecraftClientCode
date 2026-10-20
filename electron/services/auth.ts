@@ -1,8 +1,13 @@
 import { app, safeStorage, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import { generateKeyPairSync, randomUUID } from 'node:crypto'
 import type { Account as EmlAccount } from 'eml-lib'
-import type { Account as UiAccount } from '../../shared/ipc'
+import type {
+  Account as UiAccount,
+  DeviceIdentity,
+  PaputAccessStatus,
+} from '../../shared/ipc'
 import { AZURE_CLIENT_ID } from '../config'
 
 /**
@@ -16,14 +21,33 @@ import { AZURE_CLIENT_ID } from '../config'
 
 const STORE_FILE = 'accounts.dat'
 const LEGACY_FILE = 'account.dat' // formato antiguo (una sola cuenta)
+const DEVICE_FILE = 'paput-device.dat'
+const ACCESS_FILE = 'paput-access.dat'
 
 interface Store {
   activeUuid: string | null
   accounts: EmlAccount[]
 }
 
+interface StoredDevice extends DeviceIdentity {
+  /** PKCS#8 DER en base64url. Solo se devuelve internamente al futuro firmador. */
+  privateKey: string
+}
+
+interface AccessStore {
+  accounts: Record<string, { status: PaputAccessStatus; updatedAt: string }>
+}
+
 function storePath(): string {
   return path.join(app.getPath('userData'), STORE_FILE)
+}
+
+function devicePath(): string {
+  return path.join(app.getPath('userData'), DEVICE_FILE)
+}
+
+function accessPath(): string {
+  return path.join(app.getPath('userData'), ACCESS_FILE)
 }
 
 function decrypt(buf: Buffer): string {
@@ -33,6 +57,35 @@ function encrypt(json: string): Buffer {
   return safeStorage.isEncryptionAvailable()
     ? safeStorage.encryptString(json)
     : Buffer.from(json, 'utf8')
+}
+
+function requireProtectedStorage(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error(
+      'Windows no tiene disponible el almacenamiento seguro. No se creó una identidad del dispositivo.',
+    )
+  }
+}
+
+function loadAccessStore(): AccessStore {
+  try {
+    return JSON.parse(decrypt(fs.readFileSync(accessPath()))) as AccessStore
+  } catch {
+    return { accounts: {} }
+  }
+}
+
+function saveAccessStore(store: AccessStore): void {
+  fs.writeFileSync(accessPath(), encrypt(JSON.stringify(store)))
+}
+
+function ensureAccessRecord(uuid: string): PaputAccessStatus {
+  const store = loadAccessStore()
+  const existing = store.accounts[uuid]
+  if (existing) return existing.status
+  store.accounts[uuid] = { status: 'not-enrolled', updatedAt: new Date().toISOString() }
+  saveAccessStore(store)
+  return 'not-enrolled'
 }
 
 function loadStore(): Store {
@@ -67,6 +120,8 @@ function toUiAccount(a: EmlAccount): UiAccount {
     // nuevos que mc-heads, que a veces muestra Steve hasta indexar la skin).
     avatarUrl: `https://visage.surgeplay.com/face/64/${a.uuid}`,
     premium: a.meta?.type === 'msa',
+    provider: a.meta?.type === 'msa' ? 'microsoft' : 'offline',
+    accessStatus: ensureAccessRecord(a.uuid),
   }
 }
 
@@ -172,10 +227,42 @@ export function removeAccount(uuid: string): void {
   store.accounts = store.accounts.filter((a) => a.uuid !== uuid)
   if (store.activeUuid === uuid) store.activeUuid = store.accounts[0]?.uuid ?? null
   saveStore(store)
+
+  const access = loadAccessStore()
+  if (access.accounts[uuid]) {
+    delete access.accounts[uuid]
+    saveAccessStore(access)
+  }
 }
 
 /** La cuenta activa completa (con tokens), para lanzar el juego. */
 export function getStoredAccount(): EmlAccount | null {
   const store = loadStore()
   return store.accounts.find((a) => a.uuid === store.activeUuid) ?? null
+}
+
+/**
+ * Genera una identidad Ed25519 por instalación. La clave privada queda cifrada
+ * con safeStorage y nunca atraviesa IPC; el renderer solo recibe datos públicos.
+ */
+export function getDeviceIdentity(): DeviceIdentity {
+  try {
+    const stored = JSON.parse(decrypt(fs.readFileSync(devicePath()))) as StoredDevice
+    const { privateKey: _privateKey, ...publicIdentity } = stored
+    return publicIdentity
+  } catch {
+    requireProtectedStorage()
+    const pair = generateKeyPairSync('ed25519')
+    const stored: StoredDevice = {
+      id: randomUUID(),
+      algorithm: 'Ed25519',
+      publicKey: pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+      privateKey: pair.privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64url'),
+      createdAt: new Date().toISOString(),
+      protectedBySystem: true,
+    }
+    fs.writeFileSync(devicePath(), safeStorage.encryptString(JSON.stringify(stored)))
+    const { privateKey: _privateKey, ...publicIdentity } = stored
+    return publicIdentity
+  }
 }

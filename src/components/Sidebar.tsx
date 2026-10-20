@@ -72,7 +72,7 @@ export function Sidebar({
       {onAdd && (
         <button
           onClick={onAdd}
-          title="Añadir un grupo con su código"
+          title="Añadir un grupo con su referencia de contenido"
           className="mt-1 grid h-14 w-14 shrink-0 place-items-center rounded-2xl border-2 border-dashed border-tenso-border text-2xl text-tenso-muted transition-colors hover:border-tenso-accent hover:text-tenso-accent-soft"
         >
           +

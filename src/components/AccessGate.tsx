@@ -7,11 +7,21 @@ interface AccessGateProps {
   onCancel?: () => void
 }
 
-/** Primer paso del onboarding: vincular el launcher con un grupo publicado. */
+/** Segundo paso del onboarding: localizar el contenido de un grupo publicado. */
 export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function pasteCode() {
+    try {
+      const pasted = await navigator.clipboard.readText()
+      setCode(pasted.trim())
+      setError(null)
+    } catch {
+      setError('No pudimos leer el portapapeles. Pega la referencia con Ctrl+V.')
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -21,7 +31,7 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
     try {
       const instances = await window.tenso.redeemCode(code.trim())
       if (instances.length > 0) onUnlock(instances)
-      else setError('El código no es válido. Revísalo e inténtalo otra vez.')
+      else setError('La referencia no es válida. Cópiala completa desde Paput Studio.')
     } catch {
       setError('No pudimos contactar con el servidor del modpack. Comprueba tu conexión.')
     } finally {
@@ -32,7 +42,7 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
   const accessForm = (
     <form onSubmit={handleSubmit}>
       <label htmlFor="group-code" className="text-xs font-semibold text-white/75">
-        Código de invitación
+        Referencia del modpack
       </label>
       <div className="mt-2 flex items-center rounded-xl border border-white/10 bg-black/20 px-3 transition-colors focus-within:border-tenso-accent/70 focus-within:bg-black/30">
         <span className="mr-2 text-tenso-accent-soft">
@@ -46,11 +56,18 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
             setCode(event.target.value)
             setError(null)
           }}
-          placeholder="Pega aquí el código"
+          placeholder="Pega aquí la referencia TENSO-…"
           autoFocus
           spellCheck={false}
           className="min-w-0 flex-1 bg-transparent py-3.5 text-sm font-medium tracking-wide text-white outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-white/20"
         />
+        <button
+          type="button"
+          onClick={pasteCode}
+          className="ml-2 rounded-md border border-white/10 px-2.5 py-1 text-[10px] font-semibold text-white/55 transition-colors hover:border-tenso-accent/50 hover:text-white"
+        >
+          Pegar
+        </button>
       </div>
 
       {error && (
@@ -80,8 +97,8 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
       <div className="mt-4 flex items-start gap-2 rounded-xl border border-white/7 bg-white/[0.025] p-3 text-[10px] leading-4 text-white/35">
         <LockIcon />
         <p>
-          Este código solo añade el grupo a tu biblioteca. No contiene tu contraseña ni los datos
-          de tu cuenta de juego.
+          Esta referencia solo indica dónde descargar el contenido. No concede acceso al servidor ni
+          funciona como contraseña.
         </p>
       </div>
 
@@ -108,11 +125,11 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
           onClick={(event) => event.stopPropagation()}
         >
           <p className="text-[11px] font-bold tracking-[0.2em] text-tenso-accent-soft uppercase">
-            Nuevo grupo
+            Nuevo contenido
           </p>
           <h2 className="mt-2 text-xl font-bold">Añade otro modpack</h2>
           <p className="mt-2 mb-5 text-xs leading-5 text-white/45">
-            Usa el código que te compartió la persona que administra el grupo.
+            Usa la referencia compartida por la persona que publica el contenido.
           </p>
           {accessForm}
         </section>
@@ -122,10 +139,10 @@ export function AccessGate({ onUnlock, onCancel }: AccessGateProps) {
 
   return (
     <OnboardingShell
-      step={1}
-      eyebrow="Paso 1 de 2 · Acceso"
-      title="Conecta tu grupo"
-      description="Pega el código que te compartieron. Descargaremos la configuración correcta automáticamente."
+      step={2}
+      eyebrow="Paso 2 de 2 · Contenido"
+      title="Prepara tu instalación"
+      description="Pega la referencia del modpack. Esto configura el contenido; el permiso para jugar se gestiona por separado."
     >
       {accessForm}
     </OnboardingShell>

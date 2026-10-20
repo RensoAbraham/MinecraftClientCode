@@ -79,6 +79,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
     const active = auth.getStoredAccount()
     if (active) auth.removeAccount(active.uuid)
   })
+  ipcMain.handle(IPC.getDeviceIdentity, () => auth.getDeviceIdentity())
   ipcMain.handle(IPC.getActiveSkin, () => skin.getActiveSkin())
   ipcMain.handle(IPC.listSavedSkins, () => skin.listSavedSkins())
   ipcMain.handle(IPC.addSavedSkin, () => skin.addSavedSkin(getWindow()))

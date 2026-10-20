@@ -187,6 +187,23 @@ export interface UpdateStatus {
   error?: string
 }
 
+/** Estado de acceso a Paput. El backend y PaputAuth lo harán autoritativo. */
+export type PaputAccessStatus =
+  | 'not-enrolled'
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'revoked'
+
+/** Identidad pública de esta instalación. La clave privada nunca sale del main. */
+export interface DeviceIdentity {
+  id: string
+  algorithm: 'Ed25519'
+  publicKey: string
+  createdAt: string
+  protectedBySystem: boolean
+}
+
 /** Perfil de la cuenta autenticada, para mostrar en la UI. */
 export interface Account {
   uuid: string
@@ -194,6 +211,9 @@ export interface Account {
   avatarUrl?: string
   /** true si es cuenta premium de Microsoft (permite cambiar skin, jugar premium). */
   premium?: boolean
+  provider: 'microsoft' | 'offline'
+  /** Preparado para Worker/D1 + PaputAuth; hoy empieza como no registrado. */
+  accessStatus: PaputAccessStatus
 }
 
 /**
@@ -242,6 +262,8 @@ export interface TensoApi {
   removeAccount(uuid: string): Promise<void>
   /** Cierra la sesión de la cuenta activa. */
   logout(): Promise<void>
+  /** Identidad pública y persistente de esta instalación del launcher. */
+  getDeviceIdentity(): Promise<DeviceIdentity>
   /** Skin activa actual (data URI) para el visor 3D, o null. */
   getActiveSkin(): Promise<{ dataUrl: string; variant: 'classic' | 'slim' } | null>
   /** Lista las skins guardadas en la galería local. */
@@ -410,6 +432,7 @@ export const IPC = {
   setActiveAccount: 'tenso:setActiveAccount',
   removeAccount: 'tenso:removeAccount',
   logout: 'tenso:logout',
+  getDeviceIdentity: 'tenso:getDeviceIdentity',
   getActiveSkin: 'tenso:getActiveSkin',
   listSavedSkins: 'tenso:listSavedSkins',
   addSavedSkin: 'tenso:addSavedSkin',

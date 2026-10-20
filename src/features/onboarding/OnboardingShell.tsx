@@ -69,9 +69,9 @@ export function OnboardingShell({
             </div>
 
             <div className="mt-9 flex items-center gap-3" aria-label={`Paso ${step} de 2`}>
-              <Step active={step === 1} complete={step > 1} number="01" label="Acceso al grupo" />
+              <Step active={step === 1} complete={step > 1} number="01" label="Cuenta de juego" />
               <div className={`h-px w-8 ${step > 1 ? 'bg-tenso-accent' : 'bg-white/15'}`} />
-              <Step active={step === 2} complete={false} number="02" label="Cuenta de juego" />
+              <Step active={step === 2} complete={false} number="02" label="Contenido" />
             </div>
           </section>
 

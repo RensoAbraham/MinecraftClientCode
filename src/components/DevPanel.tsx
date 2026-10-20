@@ -24,7 +24,7 @@ const EMPTY_FORM: NewInstance = {
 
 /**
  * Espacio de trabajo de Paput Studio (solo para el dueño). Crea/edita grupos e instancias,
- * importa modpacks (.mrpack), vincula carpetas, publica/oculta y genera códigos.
+ * importa modpacks (.mrpack), vincula carpetas, publica/oculta y genera referencias.
  */
 export function DevPanel({ onClose }: DevPanelProps) {
   const [groups, setGroups] = useState<DevGroup[]>([])
@@ -393,7 +393,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-tenso-muted">
-                Un grupo reúne varias instancias que compartes con un mismo código.
+                Un grupo reúne varias instancias que compartes con una misma referencia de contenido.
               </p>
             </div>
 
@@ -474,9 +474,9 @@ export function DevPanel({ onClose }: DevPanelProps) {
                       <button
                         onClick={() => copy(g.code)}
                         className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted hover:text-tenso-text"
-                        title="Copia el código para compartir el grupo"
+                        title="Copia la referencia de contenido del grupo"
                       >
-                        <CopyIcon /> {copied === g.code ? '¡Copiado!' : 'Código'}
+                        <CopyIcon /> {copied === g.code ? '¡Copiada!' : 'Referencia'}
                       </button>
                       <button
                         onClick={() => importMrpack(g.id)}

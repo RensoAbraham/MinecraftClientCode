@@ -20,6 +20,7 @@ const api: TensoApi = {
   setActiveAccount: (uuid) => ipcRenderer.invoke(IPC.setActiveAccount, uuid),
   removeAccount: (uuid) => ipcRenderer.invoke(IPC.removeAccount, uuid),
   logout: () => ipcRenderer.invoke(IPC.logout),
+  getDeviceIdentity: () => ipcRenderer.invoke(IPC.getDeviceIdentity),
   getActiveSkin: () => ipcRenderer.invoke(IPC.getActiveSkin),
   listSavedSkins: () => ipcRenderer.invoke(IPC.listSavedSkins),
   addSavedSkin: () => ipcRenderer.invoke(IPC.addSavedSkin),

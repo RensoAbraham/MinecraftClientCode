@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Account } from '../../shared/ipc'
+import type { Account, PaputAccessStatus } from '../../shared/ipc'
 
 interface AccountMenuProps {
   onClose: () => void
@@ -8,6 +8,14 @@ interface AccountMenuProps {
 }
 
 type AccountItem = Account & { active: boolean }
+
+const ACCESS_LABELS: Record<PaputAccessStatus, string> = {
+  'not-enrolled': 'Sin vincular',
+  pending: 'Pendiente',
+  approved: 'Aprobada',
+  denied: 'Rechazada',
+  revoked: 'Revocada',
+}
 
 /**
  * Selector de cuentas: cambiar entre cuentas, añadir una cuenta Microsoft o
@@ -99,7 +107,10 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
                     {a.premium ? 'Microsoft' : 'No premium'}
                   </span>
                 </div>
-                {a.active && <p className="text-xs text-tenso-accent-soft">Activa</p>}
+                <p className="text-xs text-tenso-muted">
+                  {a.active && <span className="text-tenso-accent-soft">Activa · </span>}
+                  Acceso Paput: {ACCESS_LABELS[a.accessStatus]}
+                </p>
               </div>
               {!a.active && (
                 <button
@@ -130,7 +141,7 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
         </button>
 
         <div className="mt-4 border-t border-tenso-border pt-3">
-          <p className="mb-2 text-xs text-tenso-muted">Añadir usuario no premium</p>
+          <p className="mb-2 text-xs text-tenso-muted">Añadir identidad offline provisional</p>
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -161,7 +172,10 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
               {busy === 'offline' ? 'Añadiendo…' : 'Añadir'}
             </button>
           </form>
-          <p className="mt-2 text-[11px] text-tenso-muted">3–16 caracteres: letras, números y _</p>
+          <p className="mt-2 text-[11px] leading-4 text-tenso-muted">
+            3–16 caracteres: letras, números y _. La aprobación real se activará al conectar
+            PaputAuth; crearla aquí todavía no reserva el nombre en el servidor.
+          </p>
         </div>
 
         <button onClick={onClose} className="mt-3 w-full rounded-xl py-2 text-sm text-tenso-muted hover:text-tenso-text">

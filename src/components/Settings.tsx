@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { DeviceIdentity } from '../../shared/ipc'
 
 interface SettingsProps {
   onClose: () => void
@@ -28,9 +29,15 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
   const [javaBusy, setJavaBusy] = useState(false)
   const [javaProg, setJavaProg] = useState<{ label: string; fraction: number } | null>(null)
   const [javaError, setJavaError] = useState<string | null>(null)
+  const [device, setDevice] = useState<DeviceIdentity | null>(null)
+  const [deviceError, setDeviceError] = useState<string | null>(null)
 
   useEffect(() => {
     window.tenso.javaCheck().then(setJava)
+    window.tenso
+      .getDeviceIdentity()
+      .then(setDevice)
+      .catch((caught) => setDeviceError(caught instanceof Error ? caught.message : String(caught)))
     const off = window.tenso.onJavaInstallProgress(setJavaProg)
     return off
   }, [])
@@ -128,6 +135,38 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
               <SunIcon /> Claro
             </button>
           </div>
+        </div>
+
+        {/* Base local que usará el futuro backend + PaputAuth. */}
+        <div className="mt-4 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Identidad de este dispositivo</p>
+              <p className="mt-1 text-xs leading-5 text-tenso-muted">
+                La clave privada permanece cifrada en este equipo. Worker/D1 y PaputAuth usarán
+                únicamente la parte pública para aprobar conexiones.
+              </p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                device
+                  ? 'bg-green-500/10 text-green-400'
+                  : deviceError
+                    ? 'bg-red-500/10 text-red-300'
+                    : 'bg-tenso-panel text-tenso-muted'
+              }`}
+            >
+              {device ? 'Preparada' : deviceError ? 'Error' : 'Cargando'}
+            </span>
+          </div>
+          {device && (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-tenso-muted">
+              <span>ID {device.id.slice(0, 8)}</span>
+              <span>{device.algorithm}</span>
+              <span>Protegida por el sistema</span>
+            </div>
+          )}
+          {deviceError && <p className="mt-2 text-xs text-red-300">{deviceError}</p>}
         </div>
 
         {/* --- Espacio --- */}
@@ -261,7 +300,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
             <p className="mb-1 text-xs font-bold tracking-wide text-red-300/90 uppercase">Eliminar instancia</p>
             <p className="mb-3 text-xs text-tenso-muted">
               Borra por completo una instancia de tu equipo (mods, mundos y ajustes). Útil si quedó
-              rota o "fantasma" y no se deja limpiar. Tendrás que volver a poner su código para recuperarla.
+              rota o "fantasma" y no se deja limpiar. Necesitarás su referencia para recuperarla.
             </p>
             <div className="space-y-2">
               {groups.map((g) => (
@@ -332,7 +371,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
                   <h3 className="text-base font-bold text-red-300">¿Seguro del todo?</h3>
                   <p className="mt-2 text-sm text-tenso-muted">
                     Última confirmación. Para volver a tener <strong className="text-tenso-text">{confirm.name}</strong>{' '}
-                    tendrás que poner su código otra vez.
+                    tendrás que poner su referencia otra vez.
                   </p>
                   <div className="mt-5 flex justify-end gap-2">
                     <button onClick={() => setConfirm(null)} disabled={removing} className="rounded-lg border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text disabled:opacity-60">

@@ -175,10 +175,10 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
   }
 
   if (checking) return <div className="pixel-grid h-full w-full" />
+  if (!account) return <Login onLogin={setAccount} />
   if (instances.length === 0) {
     return <AccessGate onUnlock={handleUnlock} />
   }
-  if (!account) return <Login onLogin={setAccount} />
 
   const selectedGroup = selectedGroupId
     ? groups.find((group) => group.groupId === selectedGroupId)
