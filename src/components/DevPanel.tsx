@@ -23,7 +23,7 @@ const EMPTY_FORM: NewInstance = {
 }
 
 /**
- * Panel del desarrollador (solo en modo Dev). Crea/edita grupos e instancias,
+ * Espacio de trabajo de Paput Studio (solo para el dueño). Crea/edita grupos e instancias,
  * importa modpacks (.mrpack), vincula carpetas, publica/oculta y genera códigos.
  */
 export function DevPanel({ onClose }: DevPanelProps) {
@@ -172,7 +172,12 @@ export function DevPanel({ onClose }: DevPanelProps) {
         setDirty(true)
         await reload()
         const extra = res.skipped > 0 ? ` (${res.skipped} no se pudieron descargar)` : ''
-        alert(`Importado "${res.name}": ${res.downloaded} archivos${extra}.\nLoader: ${res.loader} ${res.loaderVersion}`)
+        const saved = (res.externalBytes / 1024 / 1024).toFixed(1)
+        alert(
+          `Importado "${res.name}": ${res.downloaded} archivos${extra}.\n` +
+            `${saved} MB se descargarán desde Modrinth y no ocuparán espacio en R2.\n` +
+            `Loader: ${res.loader} ${res.loaderVersion}`,
+        )
       }
     } catch (e) {
       alert(`No se pudo importar: ${e instanceof Error ? e.message : String(e)}`)
@@ -256,69 +261,114 @@ export function DevPanel({ onClose }: DevPanelProps) {
     (n, g) => n + g.instances.filter((i) => i.published).length,
     0,
   )
+  const totalInstances = groups.reduce((count, group) => count + group.instances.length, 0)
 
   return (
-    <div className="dev-surface fixed inset-0 z-50 flex flex-col">
-      {/* Cabecera */}
-      <header className="flex items-center justify-between gap-3 border-b border-tenso-border bg-tenso-panel/60 px-6 py-3 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-tenso-accent/15 text-tenso-accent-soft">
-            <CodeIcon />
+    <div className="dev-surface fixed inset-0 z-50 flex">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-white/8 bg-[#111315]/92 p-4 backdrop-blur-xl">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="grid h-10 w-10 place-items-center rounded-lg bg-tenso-accent text-[#17120a]">
+            <StudioIcon />
           </div>
           <div>
-            <h1 className="text-lg font-black leading-tight">
-              Panel <span className="text-tenso-accent-soft">Dev</span>
-            </h1>
-            <p className="text-xs text-tenso-muted">
-              {groups.length} grupo{groups.length === 1 ? '' : 's'} · {totalPublished} instancia
-              {totalPublished === 1 ? '' : 's'} publicada{totalPublished === 1 ? '' : 's'}
-            </p>
+            <h1 className="text-sm font-black tracking-wide text-white">PAPUT STUDIO</h1>
+            <p className="text-[10px] text-white/35">Workspace privado</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <nav className="mt-8 space-y-1">
+          <StudioNavItem active icon={<GridIcon />}>Proyectos</StudioNavItem>
           <button
-            onClick={publish}
-            disabled={publishing}
-            className={`rounded-xl px-5 py-2 font-bold text-white transition-all active:scale-95 disabled:opacity-60 ${
-              dirty ? 'bg-tenso-accent hover:bg-tenso-accent-soft' : 'bg-tenso-panel-2 text-tenso-muted'
-            }`}
-            title="Genera los manifiestos y los sube a R2 (si está configurada)"
+            onClick={() => setShowR2(true)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white"
           >
-            {publishing ? 'Publicando…' : dirty ? 'Publicar cambios •' : 'Publicar'}
+            <CloudIcon /> Configuración R2
           </button>
+          <button
+            onClick={() => setShowR2Manager(true)}
+            disabled={!r2}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <DatabaseIcon /> Contenido remoto
+          </button>
+        </nav>
+
+        <div className="mt-auto space-y-3">
+          <div className="rounded-xl border border-white/8 bg-white/[0.025] p-3">
+            <div className="flex items-center gap-2 text-[10px] font-semibold text-white/60">
+              <span className={`h-2 w-2 rounded-full ${r2 ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              {r2 ? 'Cloudflare R2 conectada' : 'Publicación solo local'}
+            </div>
+            <p className="mt-1.5 text-[9px] leading-4 text-white/25">
+              {r2 ? 'Los jugadores pueden recibir tus publicaciones.' : 'Configura R2 antes de compartir.'}
+            </p>
+          </div>
+          <p className="px-2 text-[9px] leading-4 text-white/20">
+            Acceso local protegido. Atajo: Ctrl + Shift + D
+          </p>
           <button
             onClick={onClose}
-            className="rounded-lg border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
-            title="Volver a la selección de modo"
+            className="flex w-full items-center gap-3 rounded-xl border border-white/8 px-3 py-2.5 text-xs font-semibold text-white/45 transition-colors hover:bg-white/5 hover:text-white"
           >
-            ← Salir
+            <BackIcon /> Volver a Paput Client
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Barra de progreso de la publicación / subida a R2 */}
-      {pubProgress && (
-        <div className="border-b border-tenso-border bg-tenso-panel/80 px-6 py-2 backdrop-blur">
-          <div className="mx-auto w-full max-w-4xl">
-            <div className="mb-1 flex justify-between text-xs">
-              <span className="truncate text-tenso-text">{pubProgress.label}</span>
-              {pubProgress.fraction >= 0 && (
-                <span className="shrink-0 text-tenso-muted">{Math.round(pubProgress.fraction * 100)}%</span>
-              )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-[74px] shrink-0 items-center justify-between gap-4 border-b border-white/8 bg-tenso-bg/55 px-7 backdrop-blur-xl">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.18em] text-tenso-accent-soft uppercase">
+              Workspace / Modpacks
+            </p>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-white">Proyectos</h2>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {dirty && (
+              <span className="hidden items-center gap-1.5 text-[10px] text-amber-300/70 sm:flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Cambios sin publicar
+              </span>
+            )}
+            <button
+              onClick={publish}
+              disabled={publishing}
+              className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-60 ${
+                dirty
+                  ? 'bg-tenso-accent text-[#17120a] hover:bg-tenso-accent-soft'
+                  : 'border border-white/8 bg-white/5 text-white/40'
+              }`}
+              title="Genera los manifiestos y los sube a R2"
+            >
+              <PublishIcon />
+              {publishing ? 'Publicando…' : 'Publicar cambios'}
+            </button>
+          </div>
+        </header>
+
+        {pubProgress && (
+          <div className="border-b border-white/8 bg-tenso-panel/70 px-7 py-2 backdrop-blur">
+            <div className="mb-1 flex justify-between text-[10px]">
+              <span className="truncate text-white/70">{pubProgress.label}</span>
+              {pubProgress.fraction >= 0 && <span className="text-white/35">{Math.round(pubProgress.fraction * 100)}%</span>}
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-tenso-panel-2">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
               <div
                 className={`h-full rounded-full bg-tenso-accent transition-[width] duration-200 ${pubProgress.fraction < 0 ? 'anim-pulse w-1/3' : ''}`}
                 style={pubProgress.fraction >= 0 ? { width: `${pubProgress.fraction * 100}%` } : undefined}
               />
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-4xl p-6">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-6xl p-7">
+            <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StudioStat label="Grupos" value={groups.length} detail="proyectos locales" />
+              <StudioStat label="Instancias" value={totalInstances} detail="configuraciones" />
+              <StudioStat label="Publicadas" value={totalPublished} detail="visibles al jugador" accent />
+              <StudioStat label="Distribución" value={r2 ? 'Híbrida' : 'Local'} detail={r2 ? 'Modrinth + R2' : 'sin publicar'} />
+            </div>
           {/* Tarjeta de configuración: crear grupo + almacenamiento (R2) */}
           <div className="mb-6 grid gap-5 rounded-2xl border border-tenso-border bg-tenso-panel p-4 sm:grid-cols-2 sm:gap-0">
             {/* Crear grupo */}
@@ -337,7 +387,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                 <button
                   onClick={createGroup}
                   disabled={!newGroup.trim()}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-tenso-accent-soft disabled:opacity-40"
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft disabled:opacity-40"
                 >
                   <PlusIcon /> Crear
                 </button>
@@ -392,7 +442,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
               ) : (
                 <p className="mt-2 text-[11px] text-tenso-muted">
                   {r2
-                    ? 'La nube desde donde tus amigas descargan los modpacks.'
+                    ? 'R2 guarda overrides y archivos propios; los mods de Modrinth conservan su fuente.'
                     : 'Sin R2, al publicar solo se genera en local; nadie podría descargar.'}
                 </p>
               )}
@@ -432,9 +482,9 @@ export function DevPanel({ onClose }: DevPanelProps) {
                         onClick={() => importMrpack(g.id)}
                         disabled={!!importing}
                         className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted hover:text-tenso-text disabled:opacity-50"
-                        title="Importar un modpack de Modrinth (.mrpack)"
+                        title="Importa un .mrpack; sus mods no se duplicarán en R2"
                       >
-                        <UploadIcon /> Importar .mrpack
+                        <UploadIcon /> Desde Modrinth
                       </button>
                       <button
                         onClick={() => setAddingFor(addingFor === g.id ? null : g.id)}
@@ -499,7 +549,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                         <input className={`${input} col-span-2`} placeholder="Servidor Tailscale (ej. 100.x.x.x:25565, opcional)" value={form.tailscaleAddress ?? ''} onChange={(e) => setForm({ ...form, tailscaleAddress: e.target.value })} />
                         <input className={`${input} col-span-2`} placeholder="Tailscale auth key (tskey-..., para modo automático, opcional)" value={form.tailscaleAuthKey ?? ''} onChange={(e) => setForm({ ...form, tailscaleAuthKey: e.target.value })} />
                         <input className={`${input} col-span-2`} placeholder="Requisitos / descripción (ej. Para PCs potentes, 8 GB RAM)" value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                        <button onClick={() => createInstance(g.id)} className="col-span-2 rounded-lg bg-tenso-accent py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft">
+                        <button onClick={() => createInstance(g.id)} className="col-span-2 rounded-lg bg-tenso-accent py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft">
                           Crear instancia
                         </button>
                       </div>
@@ -511,7 +561,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                         <p className="mb-3 text-sm text-tenso-muted">Este grupo aún no tiene instancias.</p>
                         <button
                           onClick={() => setAddingFor(addingFor === g.id ? null : g.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-tenso-accent-soft"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft"
                         >
                           <PlusIcon /> Añadir instancia
                         </button>
@@ -524,7 +574,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                               <div className="min-w-0">
                                 <p className="flex items-center gap-2 truncate font-medium">
                                   {inst.name}
-                                  <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft shadow-[0_0_8px_rgba(166,77,252,0.35)]">
+                                  <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft">
                                     v{inst.version}
                                   </span>
                                 </p>
@@ -640,7 +690,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                                     <button onClick={() => { setEditing(null); setEditForm({}) }} className="rounded-lg px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text">
                                       Cancelar
                                     </button>
-                                    <button onClick={saveEdit} className="rounded-lg bg-tenso-accent px-4 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft">
+                                    <button onClick={saveEdit} className="rounded-lg bg-tenso-accent px-4 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft">
                                       Guardar
                                     </button>
                                   </div>
@@ -686,6 +736,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
             </p>
           )}
         </div>
+      </div>
       </div>
 
       {showR2 && (
@@ -739,11 +790,94 @@ function Badge({ ok, children }: { ok: boolean; children: ReactNode }) {
   )
 }
 
-function CodeIcon() {
+function StudioNavItem({
+  icon,
+  children,
+  active = false,
+}: {
+  icon: ReactNode
+  children: ReactNode
+  active?: boolean
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold ${
+        active
+          ? 'bg-tenso-accent/14 text-white shadow-[inset_0_0_0_1px_rgba(201,139,56,0.22)]'
+          : 'text-white/40'
+      }`}
+    >
+      {icon}
+      {children}
+    </div>
+  )
+}
+
+function StudioStat({
+  label,
+  value,
+  detail,
+  accent = false,
+}: {
+  label: string
+  value: string | number
+  detail: string
+  accent?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-tenso-panel/70 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.12)]">
+      <p className="text-[10px] font-bold tracking-[0.14em] text-white/35 uppercase">{label}</p>
+      <p className={`mt-2 text-2xl font-black ${accent ? 'text-tenso-accent-soft' : 'text-white'}`}>
+        {value}
+      </p>
+      <p className="mt-1 text-[10px] text-white/30">{detail}</p>
+    </div>
+  )
+}
+
+function StudioIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
+      <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" />
+    </svg>
+  )
+}
+function GridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+function CloudIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <path d="M17.5 19H7a5 5 0 1 1 1.1-9.88A7 7 0 0 1 21 13a6 6 0 0 1-.12 1.18A5 5 0 0 1 17.5 19Z" />
+    </svg>
+  )
+}
+function DatabaseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
+    </svg>
+  )
+}
+function BackIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <path d="m15 18-6-6 6-6M9 12h11" />
+    </svg>
+  )
+}
+function PublishIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <path d="M12 16V4m-4 4 4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" />
     </svg>
   )
 }

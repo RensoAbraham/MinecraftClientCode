@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import type { Account } from '../../shared/ipc'
-import type { Group } from '../App'
+import type { PlayerGroup } from '../features/player/types'
 
 interface SidebarProps {
-  groups: Group[]
+  groups: PlayerGroup[]
   selectedGroupId: string | null
   variants: Record<string, string>
   account: Account | null
@@ -13,10 +14,8 @@ interface SidebarProps {
   onOpenSettings: () => void
   onOpenAccounts: () => void
   onOpenSkin: () => void
-  /** Si se pasa (modo dev), muestra el botón del Panel Dev. */
-  onOpenDev?: () => void
-  /** Si se pasa (modo dev), muestra el botón del menú de vistas previas. */
-  onPreviewLogin?: () => void
+  /** Solo se pasa en el equipo del dueño; abre Paput Studio. */
+  onOpenStudio?: () => void
 }
 
 /**
@@ -34,8 +33,7 @@ export function Sidebar({
   onOpenSettings,
   onOpenAccounts,
   onOpenSkin,
-  onOpenDev,
-  onPreviewLogin,
+  onOpenStudio,
 }: SidebarProps) {
   return (
     <aside className="flex w-20 flex-col items-center gap-2 overflow-y-auto border-r border-tenso-border bg-tenso-panel py-4">
@@ -65,13 +63,7 @@ export function Sidebar({
               active ? 'border-tenso-accent ring-2 ring-tenso-accent' : 'border-tenso-border'
             }`}
           >
-            {shown?.imageUrl ? (
-              <img src={shown.imageUrl} alt={g.group} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-lg font-bold text-tenso-text">
-                {g.group.charAt(0).toUpperCase()}
-              </span>
-            )}
+            <GroupIcon key={shown?.imageUrl ?? g.groupId} imageUrl={shown?.imageUrl} name={g.group} />
           </button>
         )
       })}
@@ -90,23 +82,13 @@ export function Sidebar({
       {/* Empuja el grupo inferior de botones hacia abajo */}
       <div className="mt-auto" />
 
-      {onPreviewLogin && (
+      {onOpenStudio && (
         <button
-          onClick={onPreviewLogin}
+          onClick={onOpenStudio}
           className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
-          title="Vistas previas (dev)"
+          title="Abrir Paput Studio"
         >
-          <EyeIcon />
-        </button>
-      )}
-
-      {onOpenDev && (
-        <button
-          onClick={onOpenDev}
-          className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-xl text-tenso-muted transition-colors hover:bg-tenso-panel-2 hover:text-tenso-accent-soft"
-          title="Modo Dev"
-        >
-          <CodeIcon />
+          <WrenchIcon />
         </button>
       )}
 
@@ -151,6 +133,14 @@ export function Sidebar({
   )
 }
 
+function GroupIcon({ imageUrl, name }: { imageUrl?: string; name: string }) {
+  const [failed, setFailed] = useState(false)
+  if (imageUrl && !failed) {
+    return <img src={imageUrl} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+  }
+  return <span className="text-lg font-bold text-tenso-text">{name.charAt(0).toUpperCase()}</span>
+}
+
 function HomeIcon() {
   return (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -159,11 +149,10 @@ function HomeIcon() {
   )
 }
 
-function CodeIcon() {
+function WrenchIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
+      <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" />
     </svg>
   )
 }
@@ -172,15 +161,6 @@ function ShirtIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M16 3 12 5 8 3 3 6l2.5 4L8 9v12h8V9l2.5 1L21 6 16 3Z" />
-    </svg>
-  )
-}
-
-function EyeIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }

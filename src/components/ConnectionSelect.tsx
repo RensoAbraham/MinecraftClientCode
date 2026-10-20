@@ -49,7 +49,7 @@ export function ConnectionSelect({ instance, onChoose, onChangeVariant }: Connec
   }
 
   return (
-    <main className="pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
+    <main className="media-surface pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
       <ScreenBg bg={instance.backgroundUrl} />
       <div className="anim-fade-in relative z-10 w-full max-w-3xl">
         {step === 'choose' ? (
@@ -89,7 +89,7 @@ export function ConnectionSelect({ instance, onChoose, onChangeVariant }: Connec
                   <p className="mt-3 flex-1 text-xs leading-relaxed text-tenso-muted">
                     Conexión directa a través de un túnel. No necesitas instalar programas: pulsa y juega.
                   </p>
-                  <span className="mt-4 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-white">
+                  <span className="mt-4 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-[#17120a]">
                     Conectar
                   </span>
                 </button>
@@ -113,7 +113,7 @@ export function ConnectionSelect({ instance, onChoose, onChangeVariant }: Connec
                     Conecta por una red privada. Puede configurarse sola (instala y conecta) o a mano.
                     Útil si PLAYIT te va mal.
                   </p>
-                  <span className="mt-4 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-white">
+                  <span className="mt-4 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-[#17120a]">
                     Elegir
                   </span>
                 </button>
@@ -163,7 +163,7 @@ export function ConnectionSelect({ instance, onChoose, onChangeVariant }: Connec
                 <button
                   onClick={handleAuto}
                   disabled={connecting || !hasAuthKey}
-                  className="mt-4 rounded-lg bg-tenso-accent py-2 text-center text-sm font-bold text-white transition-colors hover:bg-tenso-accent-soft disabled:opacity-50"
+                  className="mt-4 rounded-lg bg-tenso-accent py-2 text-center text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft disabled:opacity-50"
                 >
                   {connecting ? 'Conectando…' : 'Conectar automáticamente'}
                 </button>

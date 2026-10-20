@@ -1,10 +1,18 @@
 // Generación de manifiestos del modpack (lógica compartida por el script
-// `npm run publish` y por el panel Dev). Usa fs/crypto (Node), así que SOLO
+// `npm run publish` y por Paput Studio). Usa fs/crypto (Node), así que SOLO
 // debe importarse desde el proceso main o desde scripts Node.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import {
+  MODRINTH_INDEX_FILE,
+  MODRINTH_META_DIR,
+  allowedModrinthDownload,
+  matchesModrinthHashes,
+  safePackPath,
+  type ModrinthIndex,
+} from './modrinth'
 
 export type EmlFileType = 'MOD' | 'CONFIG' | 'OTHER'
 
@@ -48,6 +56,7 @@ export const EXCLUDED_TOP = new Set([
   'xaero',
   '.mixin.out',
   'dynamic-resource-pack-cache',
+  MODRINTH_META_DIR,
 ])
 
 /** ¿La ruta (relativa POSIX) cae bajo una carpeta excluida (primer segmento)? */
@@ -84,6 +93,29 @@ function subdirs(dir: string): string[] {
     .map((e) => e.name)
 }
 
+/** URLs externas reutilizables si el archivo local sigue idéntico al .mrpack. */
+function modrinthSources(instDir: string): Map<string, string> {
+  const sourcePath = path.join(instDir, MODRINTH_META_DIR, MODRINTH_INDEX_FILE)
+  if (!fs.existsSync(sourcePath)) return new Map()
+
+  try {
+    const index = JSON.parse(fs.readFileSync(sourcePath, 'utf8')) as ModrinthIndex
+    const sources = new Map<string, string>()
+    for (const file of index.files ?? []) {
+      if (file.env?.client === 'unsupported') continue
+      const rel = safePackPath(file.path)
+      const url = allowedModrinthDownload(file.downloads ?? [])
+      const localPath = path.join(instDir, ...rel.split('/'))
+      if (!url || !fs.existsSync(localPath)) continue
+      if (matchesModrinthHashes(fs.readFileSync(localPath), file.hashes)) sources.set(rel, url)
+    }
+    return sources
+  } catch {
+    // Si el metadato está dañado, publicar por R2 es el fallback seguro.
+    return new Map()
+  }
+}
+
 /**
  * Genera el `modpack.json` de cada instancia publicada y el `group.json` del
  * grupo. Devuelve un resumen (nombre, nº publicadas/ocultas).
@@ -114,6 +146,7 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
       continue
     }
 
+    const externalSources = modrinthSources(instDir)
     const files: ManifestFile[] = walk(instDir, instDir).map((rel) => {
       const abs = path.join(instDir, rel)
       const relDir = path.posix.dirname(rel)
@@ -122,7 +155,7 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
         path: relDir === '.' ? '' : `${relDir}/`,
         size: fs.statSync(abs).size,
         sha1: sha1(abs),
-        url: `${base}/${groupId}/${instanceId}/files/${rel}`,
+        url: externalSources.get(rel) ?? `${base}/${groupId}/${instanceId}/files/${rel}`,
         type: typeFor(rel),
       }
     })
@@ -132,7 +165,6 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
     // `background.(mp4|webm|gif|png|jpg)` en la raíz de la instancia, se usan
     // como icono del sidebar y fondo animado de la pantalla. Tienen prioridad
     // sobre lo que ponga en instance.json.
-    const fileBase = `${base}/${groupId}/${instanceId}/files`
     const iconFile = files.find((f) => f.path === '' && f.name === 'icon.png')
     const bgFile = files.find((f) => f.path === '' && /^background\.(mp4|webm|gif|png|jpe?g)$/i.test(f.name))
 
@@ -147,8 +179,8 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
       tailscaleAuthKey: meta.tailscaleAuthKey ?? '',
       version: meta.version ?? '0.0.1',
       description: meta.description,
-      imageUrl: iconFile ? `${fileBase}/icon.png` : meta.imageUrl,
-      backgroundUrl: bgFile ? `${fileBase}/${bgFile.name}` : meta.backgroundUrl,
+      imageUrl: iconFile ? iconFile.url : meta.imageUrl,
+      backgroundUrl: bgFile ? bgFile.url : meta.backgroundUrl,
     })
   }
 

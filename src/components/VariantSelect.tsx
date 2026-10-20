@@ -26,7 +26,7 @@ export function VariantSelect({ groupName, instances, onChoose }: VariantSelectP
 
   if (intro) {
     return (
-      <main className="pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
+      <main className="media-surface pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
         <ScreenBg bg={bg} />
         <div className="anim-fade-in-scale relative z-10 max-w-md text-center">
           <h1 className="text-2xl font-black">{groupName}</h1>
@@ -36,7 +36,7 @@ export function VariantSelect({ groupName, instances, onChoose }: VariantSelectP
           </p>
           <button
             onClick={() => setIntro(false)}
-            className="mt-6 rounded-xl bg-tenso-accent px-10 py-2.5 font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95"
+            className="mt-6 rounded-lg bg-tenso-accent px-10 py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px"
           >
             OK
           </button>
@@ -46,7 +46,7 @@ export function VariantSelect({ groupName, instances, onChoose }: VariantSelectP
   }
 
   return (
-    <main className="pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
+    <main className="media-surface pixel-grid relative grid flex-1 place-items-center overflow-y-auto p-8">
       <ScreenBg bg={bg} />
       <div className="anim-fade-in relative z-10 w-full max-w-3xl">
         <h1 className="text-center text-xl font-bold">Elige tu tipo de instancia</h1>
@@ -71,7 +71,7 @@ export function VariantSelect({ groupName, instances, onChoose }: VariantSelectP
                   )}
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-panel to-transparent" />
                   {tag && (
-                    <span className="absolute top-2 left-2 rounded-md bg-tenso-accent/85 px-2 py-0.5 text-[11px] font-bold tracking-wide text-white shadow">
+                    <span className="absolute top-2 left-2 rounded-md bg-tenso-accent/90 px-2 py-0.5 text-[11px] font-bold tracking-wide text-[#17120a]">
                       {tag}
                     </span>
                   )}
@@ -81,7 +81,7 @@ export function VariantSelect({ groupName, instances, onChoose }: VariantSelectP
                   {inst.description && (
                     <p className="mt-1 flex-1 text-xs leading-relaxed text-tenso-muted">{inst.description}</p>
                   )}
-                  <span className="mt-3 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-white">
+                  <span className="mt-3 rounded-lg bg-tenso-accent/15 py-2 text-center text-sm font-bold text-tenso-accent-soft transition-colors group-hover:bg-tenso-accent group-hover:text-[#17120a]">
                     Elegir
                   </span>
                 </div>

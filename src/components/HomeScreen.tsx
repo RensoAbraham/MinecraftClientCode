@@ -1,10 +1,11 @@
-import type { Account } from '../../shared/ipc'
-import type { Group } from '../App'
+import { useState } from 'react'
+import type { Account, Instance } from '../../shared/ipc'
+import type { PlayerGroup } from '../features/player/types'
 import { SparkleLogo } from './SparkleLogo'
 import homeBgUrl from '../assets/home-bg.mp4'
 
 interface HomeScreenProps {
-  groups: Group[]
+  groups: PlayerGroup[]
   account: Account | null
   onSelectGroup: (groupId: string) => void
 }
@@ -15,7 +16,7 @@ interface HomeScreenProps {
  */
 export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) {
   return (
-    <main className="relative grid flex-1 place-items-center overflow-y-auto p-8">
+    <main className="media-surface relative grid flex-1 place-items-center overflow-y-auto p-8">
       {/* Fondo animado de Inicio (vídeo en bucle, sin audio) con velo para legibilidad */}
       <video
         src={homeBgUrl}
@@ -53,7 +54,7 @@ export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) 
                 {account.premium ? (
                   <span className="text-tenso-accent-soft">Premium</span>
                 ) : (
-                  <span>Offline</span>
+                  <span>No premium</span>
                 )}
               </span>
             </div>
@@ -77,24 +78,12 @@ export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) 
                     className="group w-52 overflow-hidden rounded-2xl border border-tenso-border bg-tenso-panel/80 text-left outline-none backdrop-blur transition-transform duration-200 hover:-translate-y-1"
                   >
                     <div className="relative h-32 w-full overflow-hidden bg-tenso-panel-2">
-                      {art?.imageUrl ? (
-                        <img src={art.imageUrl} alt={g.group} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                      ) : isVideo ? (
-                        <video
-                          src={art.backgroundUrl}
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          muted
-                          playsInline
-                          preload="auto"
-                          onLoadedData={(e) => {
-                            e.currentTarget.currentTime = 0.1
-                          }}
-                        />
-                      ) : (
-                        <div className="grid h-full place-items-center text-3xl font-black text-tenso-muted">
-                          {g.group.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <GroupArtwork
+                        key={`${art?.imageUrl ?? ''}:${art?.backgroundUrl ?? ''}`}
+                        instance={art}
+                        groupName={g.group}
+                        isVideo={!!isVideo}
+                      />
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-bg/95 via-tenso-bg/10 to-transparent" />
                       <span className="absolute right-3 bottom-2 left-3 truncate text-lg font-bold text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
                         {g.group}
@@ -133,5 +122,49 @@ export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) 
         </p>
       </div>
     </main>
+  )
+}
+
+function GroupArtwork({
+  instance,
+  groupName,
+  isVideo,
+}: {
+  instance?: Instance
+  groupName: string
+  isVideo: boolean
+}) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const [videoFailed, setVideoFailed] = useState(false)
+
+  if (instance?.imageUrl && !imageFailed) {
+    return (
+      <img
+        src={instance.imageUrl}
+        alt=""
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        onError={() => setImageFailed(true)}
+      />
+    )
+  }
+  if (isVideo && instance?.backgroundUrl && !videoFailed) {
+    return (
+      <video
+        src={instance.backgroundUrl}
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        muted
+        playsInline
+        preload="metadata"
+        onError={() => setVideoFailed(true)}
+        onLoadedData={(event) => {
+          event.currentTarget.currentTime = 0.1
+        }}
+      />
+    )
+  }
+  return (
+    <div className="grid h-full place-items-center text-3xl font-black text-tenso-muted">
+      {groupName.charAt(0).toUpperCase()}
+    </div>
   )
 }

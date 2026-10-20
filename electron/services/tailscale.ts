@@ -40,7 +40,7 @@ export async function status(): Promise<{ installed: boolean; connected: boolean
  * `tailscale up` con la auth key. Las ventanas de UAC son la "confirmación".
  */
 export async function connect(authKey: string): Promise<{ ok: boolean; message: string }> {
-  if (!authKey) return { ok: false, message: 'Falta la auth key de Tailscale (configúrala en el Panel Dev).' }
+  if (!authKey) return { ok: false, message: 'Falta la auth key de Tailscale (configúrala en Paput Studio).' }
 
   let exe = exePath()
 

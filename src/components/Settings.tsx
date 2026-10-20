@@ -114,7 +114,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
             <button
               onClick={() => onSetTheme('dark')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                theme === 'dark' ? 'bg-tenso-accent text-white' : 'text-tenso-muted hover:text-tenso-text'
+                theme === 'dark' ? 'bg-tenso-accent text-[#17120a]' : 'text-tenso-muted hover:text-tenso-text'
               }`}
             >
               <MoonIcon /> Oscuro
@@ -122,7 +122,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
             <button
               onClick={() => onSetTheme('light')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                theme === 'light' ? 'bg-tenso-accent text-white' : 'text-tenso-muted hover:text-tenso-text'
+                theme === 'light' ? 'bg-tenso-accent text-[#17120a]' : 'text-tenso-muted hover:text-tenso-text'
               }`}
             >
               <SunIcon /> Claro
@@ -189,7 +189,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
                   <button
                     onClick={handleInstallJava}
                     disabled={javaBusy}
-                    className="mt-3 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:opacity-60"
+                    className="mt-3 rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:opacity-60"
                   >
                     {javaBusy ? 'Instalando…' : 'Instalar Java 21'}
                   </button>

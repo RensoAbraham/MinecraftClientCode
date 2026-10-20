@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Qué es
 
-**Paput Client**: launcher de escritorio (Windows) para Minecraft *premium* que instala y sincroniza un modpack privado para un grupo cerrado, y entra directo al servidor. Tiene dos modos: **Dev** (crear/publicar instancias) y **Jugador** (canjear un código y jugar).
+**Paput Client**: launcher de escritorio (Windows) para Minecraft premium o no premium que instala y sincroniza un modpack privado para un grupo cerrado, y entra directo al servidor. El producto visible siempre es **Client**; **Paput Studio** contiene las herramientas privadas del dueño para crear/publicar instancias.
 
 Stack: Electron (proceso principal CommonJS) + React 19 + TypeScript + Vite (`vite-plugin-electron`) + Tailwind CSS v4. Librería clave: **EML-Lib** (login Microsoft, descarga de Java/Minecraft/NeoForge, lanzamiento y sync del modpack). Hosting de modpacks: **Cloudflare R2** (S3, vía `aws4fetch`).
 
@@ -44,9 +44,9 @@ El renderer siempre llama vía `window.tenso.*` (tipado por `TensoApi`).
 ## Arquitectura del proceso principal (`electron/`)
 
 - `main.ts` — ventana, auto-updater, y el protocolo propio `paput-asset://` (registrado con `registerSchemesAsPrivileged`) para servir imágenes/fondos locales del jugador.
-- **Dos modos** los decide `dev.isDevMode()`: `true` si la app NO está empaquetada, o si existe `userData/dev.enabled`. En Dev se ve el Panel Dev; en Jugador, la pantalla de código + jugar.
-- **Modo Jugador** (`services/instances.ts`): el jugador canjea un **código de grupo** (`redeemCode`) — un token (`shared/instance-code.ts`) que embebe la URL base de R2 + el `groupId`. Los grupos desbloqueados se guardan en `userData/player-groups.json` (con caché). Al resolver, baja `<baseUrl>/<groupId>/group.json` y construye por instancia su `modpackUrl` (`.../<instanceId>/modpack.json`). Las imágenes/fondos que el jugador personaliza viven en `userData/overrides/<instanceId>/` y se sirven por `paput-asset://`.
-- **Modo Dev** (`services/dev.ts`, `services/r2.ts`, `shared/publisher.ts`): crea grupos/instancias en local, importa `.mrpack` (`services/importers/mrpack.ts`), y al **Publicar** genera los manifiestos (`publisher.ts`) y los sube a Cloudflare R2 (`r2.ts`).
+- **Client siempre es la entrada**. `dev.isDevMode()` solo indica si Studio está disponible: devuelve `true` en desarrollo o cuando existe `userData/dev.enabled`. Sin esa capacidad no se muestra ninguna entrada a Studio y el proceso principal no registra sus IPC de escritura.
+- **Client** (`services/instances.ts`): el jugador canjea un **código de grupo** (`redeemCode`) — un token (`shared/instance-code.ts`) que embebe la URL base de R2 + el `groupId`. Los grupos desbloqueados se guardan en `userData/player-groups.json` (con caché). Al resolver, baja `<baseUrl>/<groupId>/group.json` y construye por instancia su `modpackUrl` (`.../<instanceId>/modpack.json`). Las imágenes/fondos que el jugador personaliza viven en `userData/overrides/<instanceId>/` y se sirven por `paput-asset://`.
+- **Paput Studio** (`services/dev.ts`, `services/r2.ts`, `shared/publisher.ts`): crea grupos/instancias en local, importa `.mrpack` (`services/importers/mrpack.ts`), y al **Publicar** genera los manifiestos (`publisher.ts`) y los sube a Cloudflare R2 (`r2.ts`). Se abre con el botón privado de la barra o `Ctrl+Shift+D` cuando la capacidad está habilitada.
 
 ## Lanzamiento del juego — `services/game.ts` (lo más delicado)
 
@@ -62,7 +62,7 @@ El renderer siempre llama vía `window.tenso.*` (tipado por `TensoApi`).
 
 - **Todo en español**: textos de UI, comentarios, mensajes de commit y CHANGELOG.
 - **Sin emojis** en ningún sitio (UI, código, CHANGELOG, commits).
-- Estilos por variables CSS `--color-tenso-*` en `src/index.css` (bloque `@theme`), con overrides de tema claro bajo `:root[data-theme='light']`; las utilidades Tailwind son `tenso-*`. El Panel Dev remapea esas variables localmente con la clase `.dev-surface` (fondo oscuro suave).
+- Estilos por variables CSS `--color-tenso-*` en `src/index.css` (bloque `@theme`), con overrides de tema claro bajo `:root[data-theme='light']`; las utilidades Tailwind son `tenso-*`. Paput Studio remapea esas variables localmente con la clase `.dev-surface` (fondo oscuro suave).
 - **Secretos**: nunca mostrar/loguear claves (p. ej. la auth key de Tailscale) en mensajes de error. El Azure Client ID sí es público (embebido).
 
 ## Notas de Windows / entorno

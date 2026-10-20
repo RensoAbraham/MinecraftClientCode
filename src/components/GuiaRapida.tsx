@@ -35,7 +35,7 @@ const STEPS: Step[] = [
   {
     selector: '[data-tour="account"]',
     title: 'Tu cuenta',
-    body: 'Tu avatar: desde aquí cambias o añades cuentas de Microsoft.',
+    body: 'Tu avatar: desde aquí cambias o añades cuentas Microsoft y usuarios no premium.',
   },
   {
     selector: '[data-tour="instance-menu"]',
@@ -110,7 +110,7 @@ export function GuiaRapida({ onClose }: GuiaRapidaProps) {
             </button>
             <button
               onClick={() => setStarted(true)}
-              className="rounded-xl bg-tenso-accent px-8 py-2.5 font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95"
+              className="rounded-lg bg-tenso-accent px-8 py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px"
             >
               Ir
             </button>
@@ -148,7 +148,7 @@ export function GuiaRapida({ onClose }: GuiaRapidaProps) {
           />
           {/* Anillo resaltando el elemento */}
           <div
-            className="pointer-events-none absolute rounded-xl ring-2 ring-tenso-accent shadow-[0_0_0_3px_rgba(166,77,252,0.25),0_0_24px_rgba(166,77,252,0.45)]"
+            className="pointer-events-none absolute rounded-xl ring-2 ring-tenso-accent shadow-[0_0_0_3px_rgba(201,139,56,0.22)]"
             style={{ left: hole.left, top: hole.top, width: hole.width, height: hole.height }}
           />
         </>
@@ -201,7 +201,7 @@ export function GuiaRapida({ onClose }: GuiaRapidaProps) {
           </button>
           <button
             onClick={() => (isLast ? onClose() : setStep((s) => s + 1))}
-            className="rounded-lg bg-tenso-accent px-6 py-2 text-sm font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95"
+            className="rounded-lg bg-tenso-accent px-6 py-2 text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px"
           >
             {isLast ? '¡Entendido!' : 'Siguiente'}
           </button>

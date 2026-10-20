@@ -250,8 +250,8 @@ export function SkinEditor({ account, onClose }: SkinEditorProps) {
 
           {!account.premium && (
             <p className="mb-3 rounded-lg bg-tenso-panel-2 p-2 text-xs text-tenso-muted">
-              La cuenta activa es offline: puedes ver y guardar skins, pero aplicarlas requiere una
-              cuenta premium de Microsoft.
+              La cuenta activa es no premium: puedes ver y guardar skins, pero aplicarlas requiere
+              una cuenta premium de Microsoft.
             </p>
           )}
 
@@ -337,7 +337,7 @@ export function SkinEditor({ account, onClose }: SkinEditorProps) {
             <button
               onClick={apply}
               disabled={busy || !selected?.id || !account.premium}
-              className="rounded-xl bg-tenso-accent px-6 py-2.5 font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-tenso-accent px-6 py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? 'Aplicando…' : 'Aplicar a mi cuenta'}
             </button>

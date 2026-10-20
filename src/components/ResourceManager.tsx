@@ -15,7 +15,7 @@ interface ResourceManagerProps {
 }
 
 /** Paleta para los iconos de recurso (tile de color con la inicial). */
-const ICON_COLORS = ['#a64dfc', '#35d0a5', '#f4b740', '#f2668b', '#4d9dfc', '#e2734d', '#7c5cff', '#2bb3a3']
+const ICON_COLORS = ['#c98b38', '#35a67d', '#d7ac45', '#c85d6f', '#4d8fc4', '#c96f45', '#8473bf', '#2b9a8d']
 function colorFor(name: string): string {
   let h = 0
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
@@ -34,7 +34,7 @@ function fmtSize(bytes: number): string {
 }
 
 /**
- * Gestor de recursos de una instancia (Panel Dev): mods, paquetes de recursos y
+ * Gestor de recursos de una instancia (Paput Studio): mods, paquetes de recursos y
  * configuraciones. Vista tipo Modrinth con cards e interruptor activar/desactivar.
  * Por ahora solo la pestaña de Mods está conectada al backend; el resto son
  * vistas listas para cuando se añada la integración.

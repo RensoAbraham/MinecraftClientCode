@@ -4,6 +4,14 @@ import path from 'node:path'
 import os from 'node:os'
 import extract from 'extract-zip'
 import type { Instance } from '../../../shared/ipc'
+import {
+  MODRINTH_INDEX_FILE,
+  MODRINTH_META_DIR,
+  allowedModrinthDownload,
+  matchesModrinthHashes,
+  safePackPath,
+  type ModrinthIndex,
+} from '../../../shared/modrinth'
 
 /**
  * Importador de modpacks Modrinth (.mrpack).
@@ -14,27 +22,10 @@ import type { Instance } from '../../../shared/ipc'
  *   - overrides/          : carpeta que se copia tal cual a .minecraft.
  *   - client-overrides/   : overrides solo para el cliente.
  *
- * Estrategia: descargamos los mods del cliente y extraemos los overrides DENTRO
- * de la carpeta de la instancia. Así el modpack queda autocontenido y se publica
- * (y se sirve a los jugadores) con el mismo flujo que una carpeta normal.
+ * Estrategia: descargamos una copia local verificada para poder probar y editar,
+ * pero conservamos el manifiesto original. Al publicar, los archivos intactos
+ * siguen usando sus URLs de Modrinth y R2 aloja solo overrides/archivos propios.
  */
-
-interface MrFile {
-  path: string
-  hashes?: { sha1?: string; sha512?: string }
-  env?: { client?: 'required' | 'optional' | 'unsupported'; server?: string }
-  downloads: string[]
-  fileSize?: number
-}
-
-interface MrIndex {
-  formatVersion: number
-  name: string
-  versionId?: string
-  summary?: string
-  dependencies: Record<string, string>
-  files: MrFile[]
-}
 
 export interface MrImportResult {
   instanceId: string
@@ -44,9 +35,10 @@ export interface MrImportResult {
   loaderVersion: string
   downloaded: number
   skipped: number
+  externalBytes: number
 }
 
-/** Progreso del import, para mostrarlo en la UI del panel Dev. */
+/** Progreso del import, para mostrarlo en la UI de Paput Studio. */
 export type ImportProgress = (p: { label: string; fraction: number }) => void
 
 /** Convierte un nombre en un id seguro para carpeta (slug). */
@@ -147,7 +139,11 @@ export async function importMrpackFromPath(
     if (!fs.existsSync(indexPath)) {
       throw new Error('El archivo no es un .mrpack válido (falta modrinth.index.json).')
     }
-    const index: MrIndex = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+    const index: ModrinthIndex = JSON.parse(fs.readFileSync(indexPath, 'utf8'))
+
+    if (index.formatVersion !== 1 || (index.game && index.game !== 'minecraft')) {
+      throw new Error('El archivo usa una versión o juego no compatible con Paput Client.')
+    }
 
     const name = index.name?.trim() || path.basename(mrpackPath, '.mrpack')
     const mcVersion = index.dependencies?.minecraft ?? ''
@@ -161,6 +157,12 @@ export async function importMrpackFromPath(
     }
     const instDir = path.join(groupDir, instanceId)
     fs.mkdirSync(instDir, { recursive: true })
+
+    // Conservamos el manifiesto como metadato privado. El publicador lo usa para
+    // apuntar los archivos sin cambios a Modrinth en vez de duplicarlos en R2.
+    const metaDir = path.join(instDir, MODRINTH_META_DIR)
+    fs.mkdirSync(metaDir, { recursive: true })
+    fs.writeFileSync(path.join(metaDir, MODRINTH_INDEX_FILE), JSON.stringify(index, null, 2))
 
     // instance.json (oculta por defecto; el dev completa servidor/arte luego).
     fs.writeFileSync(
@@ -181,40 +183,52 @@ export async function importMrpackFromPath(
       ),
     )
 
-    // Copia los overrides (configs, resourcepacks, etc.) dentro de la instancia.
-    copyOverrides(path.join(tmp, 'overrides'), instDir)
-    copyOverrides(path.join(tmp, 'client-overrides'), instDir)
-
     // Descarga los archivos del CLIENTE (excluye los marcados "unsupported").
     const clientFiles = (index.files ?? []).filter(
       (f) => f.env?.client !== 'unsupported' && f.downloads?.length > 0,
     )
     let downloaded = 0
     let skipped = 0
+    let externalBytes = 0
     for (let i = 0; i < clientFiles.length; i++) {
       const f = clientFiles[i]
-      const dest = path.join(instDir, ...f.path.split('/'))
       onProgress?.({
         label: `Descargando mods ${i + 1}/${clientFiles.length}`,
         fraction: clientFiles.length ? (i + 1) / clientFiles.length : -1,
       })
       try {
-        const res = await fetch(f.downloads[0])
+        const rel = safePackPath(f.path)
+        const sourceUrl = allowedModrinthDownload(f.downloads)
+        if (!sourceUrl) throw new Error('El archivo no tiene una fuente HTTPS permitida.')
+        const res = await fetch(sourceUrl, { redirect: 'follow' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const buf = Buffer.from(await res.arrayBuffer())
+        if (f.fileSize != null && buf.length !== f.fileSize) {
+          throw new Error('El tamaño descargado no coincide con el manifiesto.')
+        }
+        if (!matchesModrinthHashes(buf, f.hashes)) {
+          throw new Error('El archivo descargado no coincide con sus hashes SHA-1/SHA-512.')
+        }
+        const dest = path.join(instDir, ...rel.split('/'))
         fs.mkdirSync(path.dirname(dest), { recursive: true })
         fs.writeFileSync(dest, buf)
         downloaded++
+        externalBytes += buf.length
       } catch {
         skipped++
       }
     }
 
+    // Los overrides se aplican DESPUÉS de los archivos descargados, como define
+    // el formato. Si reemplazan uno de ellos, su hash cambia y se publicará en R2.
+    copyOverrides(path.join(tmp, 'overrides'), instDir)
+    copyOverrides(path.join(tmp, 'client-overrides'), instDir)
+
     // Activa los resourcepacks descargados si el modpack no lo hizo ya.
     ensureResourcePacksEnabled(instDir)
 
     onProgress?.({ label: 'Listo', fraction: 1 })
-    return { instanceId, name, mcVersion, loader, loaderVersion, downloaded, skipped }
+    return { instanceId, name, mcVersion, loader, loaderVersion, downloaded, skipped, externalBytes }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

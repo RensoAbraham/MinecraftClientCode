@@ -32,7 +32,7 @@ export function UpdateBanner() {
             </span>
             <button
               onClick={() => window.tenso.updateDownload()}
-              className="rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+              className="rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
             >
               Descargar
             </button>
@@ -59,7 +59,7 @@ export function UpdateBanner() {
             <span className="text-sm">Actualización lista.</span>
             <button
               onClick={() => window.tenso.updateInstall()}
-              className="rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+              className="rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
             >
               Reiniciar e instalar
             </button>

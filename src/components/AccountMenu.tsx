@@ -10,15 +10,15 @@ interface AccountMenuProps {
 type AccountItem = Account & { active: boolean }
 
 /**
- * Selector de cuentas: cambiar entre cuentas, añadir (Microsoft / offline en
- * dev) y quitar. Soporta varias cuentas a la vez.
+ * Selector de cuentas: cambiar entre cuentas, añadir una cuenta Microsoft o
+ * una identidad no premium y quitar. Soporta varias cuentas a la vez.
  */
 export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
   const [accounts, setAccounts] = useState<AccountItem[]>([])
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'microsoft' | 'offline' | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [offlineName, setOfflineName] = useState('Dev')
-  const isDev = import.meta.env.DEV
+  const [offlineName, setOfflineName] = useState('')
+  const validOfflineName = /^[a-zA-Z0-9_]{3,16}$/.test(offlineName.trim())
 
   async function reload() {
     setAccounts(await window.tenso.getAccounts())
@@ -41,7 +41,7 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
 
   async function addMicrosoft() {
     if (busy) return
-    setBusy(true)
+    setBusy('microsoft')
     setError(null)
     try {
       const a = await window.tenso.login()
@@ -52,22 +52,25 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   async function addOffline() {
-    if (busy) return
-    setBusy(true)
+    if (busy || !validOfflineName) return
+    setBusy('offline')
     setError(null)
     try {
       const a = await window.tenso.loginOffline(offlineName)
       if (a) {
         await reload()
         onChanged()
+        setOfflineName('')
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
@@ -90,7 +93,12 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
             >
               <img src={a.avatarUrl} alt={a.name} className="h-9 w-9 rounded-md" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{a.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-medium">{a.name}</p>
+                  <span className="rounded-full bg-tenso-panel-2 px-1.5 py-0.5 text-[10px] text-tenso-muted">
+                    {a.premium ? 'Microsoft' : 'No premium'}
+                  </span>
+                </div>
                 {a.active && <p className="text-xs text-tenso-accent-soft">Activa</p>}
               </div>
               {!a.active && (
@@ -115,29 +123,46 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
 
         <button
           onClick={addMicrosoft}
-          disabled={busy}
-          className="w-full rounded-xl bg-tenso-accent py-2.5 font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:opacity-60"
+          disabled={busy !== null}
+          className="w-full rounded-lg bg-tenso-accent py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:opacity-60"
         >
-          {busy ? 'Procesando…' : 'Añadir cuenta de Microsoft'}
+          {busy === 'microsoft' ? 'Procesando…' : 'Añadir cuenta de Microsoft'}
         </button>
 
-        {isDev && (
-          <div className="mt-3 flex gap-2 border-t border-tenso-border pt-3">
+        <div className="mt-4 border-t border-tenso-border pt-3">
+          <p className="mb-2 text-xs text-tenso-muted">Añadir usuario no premium</p>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              addOffline()
+            }}
+          >
             <input
               value={offlineName}
-              onChange={(e) => setOfflineName(e.target.value)}
-              placeholder="Nombre offline"
+              onChange={(e) => {
+                setOfflineName(e.target.value)
+                setError(null)
+              }}
+              placeholder="Nombre de jugador"
+              minLength={3}
+              maxLength={16}
+              pattern="[a-zA-Z0-9_]+"
+              autoComplete="username"
+              spellCheck={false}
+              aria-label="Nombre de jugador no premium"
               className="min-w-0 flex-1 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm outline-none focus:border-tenso-accent"
             />
             <button
-              onClick={addOffline}
-              disabled={busy}
+              type="submit"
+              disabled={busy !== null || !validOfflineName}
               className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm text-tenso-muted hover:text-tenso-text disabled:opacity-50"
             >
-              Añadir offline
+              {busy === 'offline' ? 'Añadiendo…' : 'Añadir'}
             </button>
-          </div>
-        )}
+          </form>
+          <p className="mt-2 text-[11px] text-tenso-muted">3–16 caracteres: letras, números y _</p>
+        </div>
 
         <button onClick={onClose} className="mt-3 w-full rounded-xl py-2 text-sm text-tenso-muted hover:text-tenso-text">
           Cerrar

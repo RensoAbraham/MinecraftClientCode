@@ -1,9 +1,10 @@
 # Paput Client
 
-Launcher de escritorio para Minecraft (premium) hecho para jugar modpacks con un
-grupo cerrado de amigos: instala el modpack solo, mantiene a todas en la misma
-versión y entra directo al servidor. Incluye un **panel de desarrollador** (solo
-para el dueño) para crear/publicar instancias y un **modo jugador** para el resto.
+Launcher de escritorio para Minecraft hecho para jugar modpacks con un
+grupo cerrado de amigos: instala el modpack solo, mantiene a todos en la misma
+versión y entra directo al servidor. El launcher siempre abre **Paput Client**;
+las herramientas de creación y publicación viven en **Paput Studio**, un área
+local que solo se habilita en el equipo del dueño.
 
 > Este repositorio es para mostrar **cómo está construido el cliente**, no es una
 > guía de instalación para jugadores.
@@ -14,7 +15,7 @@ para el dueño) para crear/publicar instancias y un **modo jugador** para el res
 - **Vite** + **vite-plugin-electron** — bundling y dev server.
 - **React 19** + **TypeScript** — interfaz.
 - **Tailwind CSS v4** — estilos.
-- **EML-Lib** — autenticación con Microsoft (premium), descarga de Java/Minecraft/
+- **EML-Lib** — autenticación con Microsoft (premium) o por nombre (no premium), descarga de Java/Minecraft/
   NeoForge, lanzamiento del juego y sincronización del modpack.
 - **skinview3d** (Three.js) — visor 3D de skins y capas.
 - **Cloudflare R2** (S3-compatible, vía `aws4fetch`) — hosting de los archivos del
@@ -27,17 +28,32 @@ para el dueño) para crear/publicar instancias y un **modo jugador** para el res
 
 - `electron/` — proceso principal: servicios de auth, juego, instancias, panel
   dev, R2, skins, Java y el contrato IPC.
-- `src/` — interfaz React (pantallas de inicio, login, panel dev, editor de skins…).
+- `src/App.tsx` — raíz mínima: abre Client y permite cambiar a Studio solo cuando
+  el equipo tiene acceso local habilitado.
+- `src/features/player/` — flujo del jugador, biblioteca y lanzamiento.
+- `src/features/studio/` — entrada a las herramientas de creación/publicación.
+- `src/features/onboarding/` — experiencia compartida de acceso y cuenta.
+- `src/components/` — pantallas y componentes visuales reutilizables.
 - `shared/` — tipos e IPC compartidos entre main y renderer (única fuente de verdad).
 - `scripts/` — utilidades de desarrollo (servir/publicar modpacks, generar iconos).
 
 ## Cómo funciona (alto nivel)
 
-1. El **dev** crea/importa instancias en el panel, les pone versión, servidor e
-   imagen, y **publica**: se generan los manifiestos y se suben a R2.
+1. El dueño crea o importa una instancia `.mrpack` en Paput Studio, completa
+   servidor/arte y publica. Los archivos intactos del pack conservan sus URLs
+   verificadas de Modrinth; R2 recibe únicamente overrides, configuración, arte
+   y archivos propios.
 2. El dev comparte un **código de grupo** (token con la URL de R2 + id del grupo).
-3. El **jugador** mete el código, inicia sesión con Microsoft y pulsa JUGAR: el
-   launcher descarga/actualiza el modpack y entra al servidor.
+3. El **jugador** mete el código, inicia sesión con Microsoft o con un nombre no
+   premium y pulsa JUGAR: el
+   launcher descarga/actualiza el modpack desde ambas fuentes y entra al servidor.
+
+La publicación mantiene cada prefijo de R2 como un espejo: elimina archivos
+antiguos que ya no aparecen en el manifiesto, evitando que versiones anteriores
+consuman almacenamiento indefinidamente.
+
+> Los usuarios no premium solo pueden conectarse a servidores configurados para
+> admitir autenticación offline/no premium.
 
 ## Desarrollo
 
@@ -48,3 +64,23 @@ npm run build        # genera el instalador (.exe) en release/
 ```
 
 El Client ID de Azure (público) se configura en `.env` (ver `.env.example`).
+
+### Acceso privado a Paput Studio
+
+En desarrollo, Studio está disponible automáticamente. En la instalación del
+dueño se habilita una sola vez desde este repositorio:
+
+```bash
+npm run studio:enable
+```
+
+Después de reiniciar el launcher, se puede abrir desde el discreto botón de
+herramientas de la barra lateral o con `Ctrl+Shift+D` (también funciona durante
+el onboarding). Para convertir ese equipo nuevamente en un Client normal:
+
+```bash
+npm run studio:disable
+```
+
+Las instalaciones de jugadores no llevan ese marcador local, no muestran
+ninguna entrada a Studio y tampoco registran sus canales IPC de escritura.

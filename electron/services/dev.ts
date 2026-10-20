@@ -9,11 +9,11 @@ import * as r2 from './r2'
 import { importMrpack as runImportMrpack, type ImportProgress, type MrImportResult } from './importers/mrpack'
 
 /**
- * Servicio del PANEL DEV (solo para el dueño).
+ * Servicio de PAPUT STUDIO (solo para el dueño).
  *
- * - Modo Dev: activo en desarrollo (no empaquetado) o si existe el archivo
+ * - Acceso Studio: activo en desarrollo (no empaquetado) o si existe el archivo
  *   marcador `dev.enabled` en userData. Las copias de los jugadores no lo
- *   tienen, así que nunca ven el panel.
+ *   tienen, así que nunca ven Studio.
  * - Gestiona los grupos/instancias locales: listar, publicar/ocultar y generar
  *   manifiestos + códigos de grupo.
  *

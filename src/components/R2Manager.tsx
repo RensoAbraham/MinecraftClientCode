@@ -142,7 +142,7 @@ export function R2Manager({ onClose }: R2ManagerProps) {
               <button onClick={() => setConfirm(null)} className="rounded-lg px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text">
                 Cancelar
               </button>
-              <button onClick={doDelete} className="rounded-lg bg-tenso-accent px-4 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft">
+              <button onClick={doDelete} className="rounded-lg bg-tenso-accent px-4 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft">
                 Borrar
               </button>
             </div>

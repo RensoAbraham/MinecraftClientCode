@@ -78,7 +78,7 @@ export function R2Settings({ onClose }: R2SettingsProps) {
         </div>
 
         <div className="mt-5 flex gap-2">
-          <button onClick={save} className="flex-1 rounded-xl bg-tenso-accent py-2.5 font-bold text-white transition-all hover:bg-tenso-accent-soft active:scale-95">
+          <button onClick={save} className="flex-1 rounded-lg bg-tenso-accent py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px">
             {saved ? '¡Guardado!' : 'Guardar'}
           </button>
           <button onClick={onClose} className="rounded-xl border border-tenso-border px-4 text-sm text-tenso-muted hover:text-tenso-text">

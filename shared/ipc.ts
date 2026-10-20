@@ -83,7 +83,7 @@ export interface Settings {
   instanceSettings?: Record<string, { maxRamMb?: number; autoJoin?: boolean }>
 }
 
-/** Una instancia tal como la ve el PANEL DEV. */
+/** Una instancia tal como la ve Paput Studio. */
 export interface DevInstance {
   id: string
   name: string
@@ -107,7 +107,7 @@ export interface DevInstance {
   fileCount: number
 }
 
-/** Campos editables de una instancia desde el panel Dev. */
+/** Campos editables de una instancia desde Paput Studio. */
 export interface InstancePatch {
   name?: string
   mcVersion?: string
@@ -120,7 +120,7 @@ export interface InstancePatch {
   version?: string
 }
 
-/** Un grupo tal como lo ve el PANEL DEV. */
+/** Un grupo tal como lo ve Paput Studio. */
 export interface DevGroup {
   id: string
   name: string
@@ -140,9 +140,11 @@ export interface MrImportSummary {
   downloaded: number
   /** Nº de archivos que no se pudieron descargar. */
   skipped: number
+  /** Bytes que podrán servirse desde las fuentes del .mrpack sin ocupar R2. */
+  externalBytes: number
 }
 
-/** Datos para crear una instancia desde el panel Dev. */
+/** Datos para crear una instancia desde Paput Studio. */
 export interface NewInstance {
   name: string
   mcVersion: string
@@ -226,8 +228,8 @@ export interface TensoApi {
   /** Inicia sesión con Microsoft (abre el flujo OAuth). */
   login(): Promise<Account | null>
   /**
-   * Inicia sesión en modo offline con un nombre de usuario.
-   * SOLO para desarrollo/pruebas locales: no sirve para servidores premium.
+   * Inicia sesión sin cuenta premium usando un nombre de Minecraft.
+   * Solo funciona en servidores que admitan autenticación offline/no premium.
    */
   loginOffline(username: string): Promise<Account | null>
   /** Devuelve la cuenta ACTIVA (validándola/renovándola si es premium). */
@@ -330,7 +332,7 @@ export interface TensoApi {
   /** Suscribe al progreso de la instalación de Java. Devuelve desuscripción. */
   onJavaInstallProgress(cb: (p: { label: string; fraction: number }) => void): () => void
 
-  // --- Panel Dev (solo dueño) ---
+  // --- Paput Studio (solo dueño) ---
   /** ¿Está activo el modo desarrollador en este equipo? */
   isDevMode(): Promise<boolean>
   /** Lista los grupos/instancias del dev. */

@@ -110,72 +110,76 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
     installJava((p) => getWindow()?.webContents.send(IPC.javaInstallProgress, p)),
   )
 
-  // --- Panel Dev (Fase 6) --------------------------------------------------
+  // --- Paput Studio (solo dueño) -------------------------------------------
   ipcMain.handle(IPC.isDevMode, () => dev.isDevMode())
-  ipcMain.handle(IPC.devListGroups, () => dev.listGroups())
-  ipcMain.handle(IPC.devSetPublished, (_e, g: string, i: string, p: boolean) =>
-    dev.setPublished(g, i, p),
-  )
-  ipcMain.handle(IPC.devPublish, () =>
-    dev.publishAll((p) => getWindow()?.webContents.send(IPC.devPublishProgress, p)),
-  )
-  ipcMain.handle(IPC.r2Test, () => r2.testConnection())
-  ipcMain.handle(IPC.r2Clear, () =>
-    r2.clearBucket((done, total, label) =>
-      getWindow()?.webContents.send(IPC.devPublishProgress, {
-        label: `Vaciando R2 (${done}/${total}): ${label}`,
-        fraction: total ? done / total : -1,
-      }),
-    ),
-  )
-  ipcMain.handle(IPC.r2Summary, () => r2.summarize())
-  ipcMain.handle(IPC.r2DeletePrefix, (_e, prefix: string) =>
-    r2.deletePrefix(prefix, (done, total, label) =>
-      getWindow()?.webContents.send(IPC.devPublishProgress, {
-        label: `Borrando ${prefix} (${done}/${total}): ${label}`,
-        fraction: total ? done / total : -1,
-      }),
-    ),
-  )
-  ipcMain.handle(IPC.devCreateGroup, (_e, name: string) => dev.createGroup(name))
-  ipcMain.handle(IPC.devCreateInstance, (_e, groupId: string, meta) =>
-    dev.createInstance(groupId, meta),
-  )
-  ipcMain.handle(IPC.devUpdateInstance, (_e, g: string, i: string, patch) =>
-    dev.updateInstance(g, i, patch),
-  )
-  ipcMain.handle(IPC.devSetInstanceImage, (_e, g: string, i: string) =>
-    dev.setInstanceImage(getWindow(), g, i),
-  )
-  ipcMain.handle(IPC.devSetInstanceBackground, (_e, g: string, i: string) =>
-    dev.setInstanceBackground(getWindow(), g, i),
-  )
-  ipcMain.handle(IPC.devDeleteInstance, (_e, g: string, i: string) => dev.deleteInstance(g, i))
-  ipcMain.handle(IPC.devDeleteGroup, (_e, g: string) => dev.deleteGroup(g))
-  ipcMain.handle(IPC.devImportFolder, (_e, g: string, i: string) =>
-    dev.importFolder(getWindow(), g, i),
-  )
-  ipcMain.handle(IPC.devImportMrpack, (_e, g: string) =>
-    dev.importMrpack(getWindow(), g, (p) => getWindow()?.webContents.send(IPC.devImportProgress, p)),
-  )
-  ipcMain.handle(IPC.devOpenFolder, (_e, g: string, i: string) => dev.openInstanceFolder(g, i))
-  ipcMain.handle(IPC.devListMods, (_e, g: string, i: string) => dev.listMods(g, i))
-  ipcMain.handle(IPC.devSetModEnabled, (_e, g: string, i: string, name: string, enabled: boolean) =>
-    dev.setModEnabled(g, i, name, enabled),
-  )
-  ipcMain.handle(IPC.devPullGameConfig, (_e, g: string, i: string) => dev.pullGameConfig(g, i))
-  ipcMain.handle(IPC.devLoaderVersions, (_e, loader, mcVersion: string) =>
-    getLoaderVersions(loader, mcVersion),
-  )
-  ipcMain.handle(IPC.getR2Config, () => r2.getConfigPublic())
-  ipcMain.handle(IPC.setR2Config, (_e, cfg) => {
-    // Si el secret llega vacío, conserva el guardado (no se reescribió).
-    if (!cfg.secretAccessKey) {
-      const prev = r2.getConfig()
-      if (prev?.secretAccessKey) cfg.secretAccessKey = prev.secretAccessKey
-    }
-    r2.setConfig(cfg)
-  })
+  // La UI oculta no es una barrera de seguridad. En una instalación normal ni
+  // siquiera registramos los canales que crean, borran o publican contenido.
+  if (dev.isDevMode()) {
+    ipcMain.handle(IPC.devListGroups, () => dev.listGroups())
+    ipcMain.handle(IPC.devSetPublished, (_e, g: string, i: string, p: boolean) =>
+      dev.setPublished(g, i, p),
+    )
+    ipcMain.handle(IPC.devPublish, () =>
+      dev.publishAll((p) => getWindow()?.webContents.send(IPC.devPublishProgress, p)),
+    )
+    ipcMain.handle(IPC.r2Test, () => r2.testConnection())
+    ipcMain.handle(IPC.r2Clear, () =>
+      r2.clearBucket((done, total, label) =>
+        getWindow()?.webContents.send(IPC.devPublishProgress, {
+          label: `Vaciando R2 (${done}/${total}): ${label}`,
+          fraction: total ? done / total : -1,
+        }),
+      ),
+    )
+    ipcMain.handle(IPC.r2Summary, () => r2.summarize())
+    ipcMain.handle(IPC.r2DeletePrefix, (_e, prefix: string) =>
+      r2.deletePrefix(prefix, (done, total, label) =>
+        getWindow()?.webContents.send(IPC.devPublishProgress, {
+          label: `Borrando ${prefix} (${done}/${total}): ${label}`,
+          fraction: total ? done / total : -1,
+        }),
+      ),
+    )
+    ipcMain.handle(IPC.devCreateGroup, (_e, name: string) => dev.createGroup(name))
+    ipcMain.handle(IPC.devCreateInstance, (_e, groupId: string, meta) =>
+      dev.createInstance(groupId, meta),
+    )
+    ipcMain.handle(IPC.devUpdateInstance, (_e, g: string, i: string, patch) =>
+      dev.updateInstance(g, i, patch),
+    )
+    ipcMain.handle(IPC.devSetInstanceImage, (_e, g: string, i: string) =>
+      dev.setInstanceImage(getWindow(), g, i),
+    )
+    ipcMain.handle(IPC.devSetInstanceBackground, (_e, g: string, i: string) =>
+      dev.setInstanceBackground(getWindow(), g, i),
+    )
+    ipcMain.handle(IPC.devDeleteInstance, (_e, g: string, i: string) => dev.deleteInstance(g, i))
+    ipcMain.handle(IPC.devDeleteGroup, (_e, g: string) => dev.deleteGroup(g))
+    ipcMain.handle(IPC.devImportFolder, (_e, g: string, i: string) =>
+      dev.importFolder(getWindow(), g, i),
+    )
+    ipcMain.handle(IPC.devImportMrpack, (_e, g: string) =>
+      dev.importMrpack(getWindow(), g, (p) => getWindow()?.webContents.send(IPC.devImportProgress, p)),
+    )
+    ipcMain.handle(IPC.devOpenFolder, (_e, g: string, i: string) => dev.openInstanceFolder(g, i))
+    ipcMain.handle(IPC.devListMods, (_e, g: string, i: string) => dev.listMods(g, i))
+    ipcMain.handle(IPC.devSetModEnabled, (_e, g: string, i: string, name: string, enabled: boolean) =>
+      dev.setModEnabled(g, i, name, enabled),
+    )
+    ipcMain.handle(IPC.devPullGameConfig, (_e, g: string, i: string) => dev.pullGameConfig(g, i))
+    ipcMain.handle(IPC.devLoaderVersions, (_e, loader, mcVersion: string) =>
+      getLoaderVersions(loader, mcVersion),
+    )
+    ipcMain.handle(IPC.getR2Config, () => r2.getConfigPublic())
+    ipcMain.handle(IPC.setR2Config, (_e, cfg) => {
+      // Si el secret llega vacío, conserva el guardado (no se reescribió).
+      if (!cfg.secretAccessKey) {
+        const prev = r2.getConfig()
+        if (prev?.secretAccessKey) cfg.secretAccessKey = prev.secretAccessKey
+      }
+      r2.setConfig(cfg)
+    })
+  }
 
   // --- Jugar (Fase 3) ------------------------------------------------------
   // Sincronización del modpack (Fase 5) -> descarga/lanzamiento (Fase 3).

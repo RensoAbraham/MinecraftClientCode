@@ -6,7 +6,8 @@ import type { Account as UiAccount } from '../../shared/ipc'
 import { AZURE_CLIENT_ID } from '../config'
 
 /**
- * Servicio de autenticación con Microsoft (login premium) usando EML-Lib.
+ * Servicio de autenticación premium con Microsoft y no premium por nombre,
+ * usando EML-Lib.
  * Soporta VARIAS cuentas guardadas y una cuenta "activa".
  *
  * Todo se guarda cifrado en disco (accounts.dat) con safeStorage.
@@ -112,9 +113,19 @@ function isCancelled(err: unknown): boolean {
   return code === 'AUTH_CANCELLED' || /cancel/i.test(message)
 }
 
-/** Inicia sesión en modo offline (solo desarrollo). Añade la cuenta y la activa. */
+/**
+ * Inicia sesión sin cuenta premium. La sesión offline solo es válida en
+ * servidores que admitan este tipo de autenticación.
+ */
 export async function loginOffline(username: string): Promise<UiAccount | null> {
-  const name = username.trim() || 'Dev'
+  const name = typeof username === 'string' ? username.trim() : ''
+  if (name.length < 3 || name.length > 16) {
+    throw new Error('El nombre debe tener entre 3 y 16 caracteres.')
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(name)) {
+    throw new Error('El nombre solo puede contener letras, números y guion bajo (_).')
+  }
+
   const { CrackAuth } = await import('eml-lib')
   const account = new CrackAuth().auth(name)
   upsertActive(account)

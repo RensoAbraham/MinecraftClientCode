@@ -1,117 +1,205 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Account } from '../../shared/ipc'
-import { SparkleLogo } from './SparkleLogo'
-import homeBgUrl from '../assets/home-bg.mp4'
+import { OnboardingShell } from '../features/onboarding/OnboardingShell'
 
 interface LoginProps {
   onLogin: (account: Account) => void
 }
 
-/**
- * Pantalla de inicio de sesión con Microsoft (cuenta premium de Minecraft).
- * Al pulsar el botón, el proceso principal abre la ventana oficial de Microsoft.
- */
+type LoginMethod = 'microsoft' | 'offline'
+
+/** Segundo paso del onboarding: elegir y conectar la cuenta de juego. */
 export function Login({ onLogin }: LoginProps) {
-  const [busy, setBusy] = useState(false)
+  const [method, setMethod] = useState<LoginMethod>('microsoft')
+  const [busy, setBusy] = useState<LoginMethod | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [offlineName, setOfflineName] = useState('Dev')
+  const [offlineName, setOfflineName] = useState('')
+  const validOfflineName = /^[a-zA-Z0-9_]{3,16}$/.test(offlineName)
 
-  // El modo offline solo se ofrece en desarrollo (nunca en la versión final).
-  const isDev = import.meta.env.DEV
-
-  async function handleLogin() {
+  function selectMethod(nextMethod: LoginMethod) {
     if (busy) return
-    setBusy(true)
+    setMethod(nextMethod)
+    setError(null)
+  }
+
+  async function handleMicrosoftLogin() {
+    if (busy) return
+    setBusy('microsoft')
     setError(null)
     try {
       const account = await window.tenso.login()
-      // null = el usuario cerró la ventana de Microsoft (cancelación): no mostramos error.
       if (account) onLogin(account)
-    } catch (err) {
-      // Muestra el mensaje real para poder diagnosticar (Azure/cuenta/etc.).
-      const message = err instanceof Error ? err.message : String(err)
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught)
       setError(message)
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
-  async function handleOffline() {
-    if (busy) return
-    setBusy(true)
+  async function handleOfflineLogin() {
+    if (busy || !validOfflineName) return
+    setBusy('offline')
     setError(null)
     try {
       const account = await window.tenso.loginOffline(offlineName)
       if (account) onLogin(account)
-      else setError('No se pudo entrar en modo offline.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      else setError('No se pudo iniciar la sesión no premium.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   return (
-    <div className="relative grid h-full w-full place-items-center overflow-hidden">
-      {/* Fondo animado con velo, igual que el inicio */}
-      <video
-        src={homeBgUrl}
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
-      />
-      <div className="pointer-events-none absolute inset-0 bg-tenso-bg/60" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-bg via-tenso-bg/40 to-tenso-bg/70" />
+    <OnboardingShell
+      step={2}
+      eyebrow="Paso 2 de 2 · Cuenta"
+      title="Elige cómo vas a jugar"
+      description="Puedes usar tu cuenta oficial de Microsoft o un nombre para servidores no premium."
+    >
+      <div className="grid grid-cols-2 gap-2 rounded-xl bg-black/20 p-1.5">
+        <MethodButton
+          active={method === 'microsoft'}
+          title="Microsoft"
+          detail="Cuenta oficial"
+          icon={<MicrosoftIcon />}
+          onClick={() => selectMethod('microsoft')}
+        />
+        <MethodButton
+          active={method === 'offline'}
+          title="No premium"
+          detail="Solo tu nombre"
+          icon={<PlayerIcon />}
+          onClick={() => selectMethod('offline')}
+        />
+      </div>
 
-      <div className="anim-fade-in-scale relative z-10 w-[400px] max-w-[92vw] rounded-2xl border border-tenso-border bg-tenso-panel/80 p-8 text-center shadow-2xl backdrop-blur-md">
-        <div className="mb-3 flex justify-center">
-          <SparkleLogo size={72} />
+      {error && (
+        <div role="alert" className="mt-4 rounded-xl border border-red-400/15 bg-red-400/8 px-3 py-2.5 text-xs leading-5 text-red-200">
+          {error}
         </div>
-        <div className="text-3xl font-black tracking-tight">
-          PAPUT<span className="font-light text-tenso-muted">CLIENT</span>
-        </div>
-        <p className="mt-2 mb-6 text-sm text-tenso-muted">
-          Inicia sesión con tu cuenta de Minecraft para jugar con la ganga.
-        </p>
+      )}
 
-        <button
-          onClick={handleLogin}
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-3 rounded-xl bg-tenso-accent py-3 font-bold text-white shadow-lg transition-all hover:bg-tenso-accent-soft active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <MicrosoftIcon />
-          {busy ? 'Iniciando sesión…' : 'Iniciar sesión con Microsoft'}
-        </button>
-
-        {error && <p className="mt-4 text-sm break-words text-tenso-accent-soft">{error}</p>}
-
-        {/* Modo offline: SOLO en desarrollo, para probar sin cuenta premium. */}
-        {isDev && (
-          <div className="mt-6 border-t border-tenso-border pt-4">
-            <p className="mb-2 text-xs text-tenso-muted">Modo desarrollo (pruebas locales)</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={offlineName}
-                onChange={(e) => setOfflineName(e.target.value)}
-                placeholder="Nombre"
-                spellCheck={false}
-                className="min-w-0 flex-1 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm text-tenso-text outline-none focus:border-tenso-accent"
-              />
-              <button
-                onClick={handleOffline}
-                disabled={busy}
-                className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel-2 px-4 py-2 text-sm font-medium text-tenso-muted transition-colors hover:text-tenso-text disabled:opacity-50"
-              >
-                Offline
-              </button>
+      {method === 'microsoft' ? (
+        <div className="mt-5">
+          <div className="rounded-xl border border-white/8 bg-white/[0.025] p-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/8">
+                <ShieldIcon />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">Inicio oficial y seguro</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  Abriremos la ventana de Microsoft. Paput Client recibe la sesión, nunca tu
+                  contraseña.
+                </p>
+              </div>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+          <button
+            type="button"
+            onClick={handleMicrosoftLogin}
+            disabled={busy !== null}
+            className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg bg-white py-3 text-sm font-bold text-[#161819] transition-colors hover:bg-white/90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            <MicrosoftIcon />
+            {busy === 'microsoft' ? 'Abriendo Microsoft…' : 'Continuar con Microsoft'}
+          </button>
+          <p className="mt-3 text-center text-[10px] leading-4 text-white/30">
+            Recomendado para servidores premium y funciones oficiales de skin.
+          </p>
+        </div>
+      ) : (
+        <form
+          className="mt-5"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleOfflineLogin()
+          }}
+        >
+          <label htmlFor="offline-name" className="text-xs font-semibold text-white/75">
+            Nombre de jugador
+          </label>
+          <div className="mt-2 flex items-center rounded-xl border border-white/10 bg-black/20 px-3 transition-colors focus-within:border-tenso-accent/70 focus-within:bg-black/30">
+            <span className="mr-2 text-sm text-white/25">@</span>
+            <input
+              id="offline-name"
+              type="text"
+              value={offlineName}
+              onChange={(event) => {
+                setOfflineName(event.target.value)
+                setError(null)
+              }}
+              placeholder="TuNombre"
+              minLength={3}
+              maxLength={16}
+              pattern="[a-zA-Z0-9_]+"
+              autoComplete="username"
+              autoFocus
+              spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-white outline-none placeholder:text-white/20"
+            />
+            <span className={`text-[10px] ${offlineName.length > 16 ? 'text-red-300' : 'text-white/25'}`}>
+              {offlineName.length}/16
+            </span>
+          </div>
+          <p className="mt-2 text-[10px] text-white/35">
+            Entre 3 y 16 caracteres; usa letras, números o guion bajo.
+          </p>
+
+          <div className="mt-4 flex gap-2 rounded-xl border border-amber-300/10 bg-amber-300/[0.045] p-3 text-[10px] leading-4 text-amber-100/55">
+            <span className="mt-0.5 text-amber-200/70">◆</span>
+            <p>
+              Esta identidad no verifica que el nombre te pertenezca y solo funciona en servidores
+              configurados como no premium.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={busy !== null || !validOfflineName}
+            className="mt-4 w-full rounded-lg bg-tenso-accent py-3 text-sm font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {busy === 'offline' ? 'Preparando cuenta…' : 'Entrar con este nombre'}
+          </button>
+        </form>
+      )}
+    </OnboardingShell>
+  )
+}
+
+function MethodButton({
+  active,
+  title,
+  detail,
+  icon,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  detail: string
+  icon: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all ${
+        active
+          ? 'border-tenso-accent/50 bg-tenso-accent/12'
+          : 'border-transparent text-white/45 hover:bg-white/5 hover:text-white/75'
+      }`}
+    >
+      <span className="grid h-7 w-7 shrink-0 place-items-center">{icon}</span>
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-semibold">{title}</span>
+        <span className="block truncate text-[9px] opacity-55">{detail}</span>
+      </span>
+    </button>
   )
 }
 
@@ -122,6 +210,24 @@ function MicrosoftIcon() {
       <path fill="#7fba00" d="M12 1h10v10H12z" />
       <path fill="#00a4ef" d="M1 12h10v10H1z" />
       <path fill="#ffb900" d="M12 12h10v10H12z" />
+    </svg>
+  )
+}
+
+function PlayerIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M5 21a7 7 0 0 1 14 0" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-tenso-accent-soft" aria-hidden>
+      <path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   )
 }

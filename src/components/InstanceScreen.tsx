@@ -207,7 +207,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const isVideoBg = !!bg && /\.(mp4|webm|ogg)(\?.*)?$/i.test(bg)
 
   return (
-    <main className="relative flex flex-1 flex-col overflow-hidden">
+    <main className="media-surface relative flex flex-1 flex-col overflow-hidden">
       {/* Fondo animado (vídeo / GIF / imagen) configurado por instancia.
           Si el archivo no carga, se oculta y se muestra la marca normal. */}
       {showBg &&
@@ -267,7 +267,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
       {/* Marca de fondo (se atenúa si hay fondo personalizado) */}
       <div className="anim-fade-in-scale pointer-events-none absolute inset-0 grid place-items-center">
         <div className={`select-none text-center ${showBg ? 'opacity-25' : 'opacity-90'}`}>
-          <div className="text-7xl font-black tracking-tight text-tenso-text drop-shadow-[0_0_40px_rgba(166,77,252,0.30)]">
+          <div className="text-7xl font-black tracking-tight text-tenso-text drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
             PAPUT
           </div>
           <div className="text-5xl font-light tracking-[0.3em] text-tenso-muted">CLIENT</div>
@@ -337,7 +337,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                   <button
                     disabled={customizing}
                     onClick={() => handleCustomize(() => window.tenso.customizeInstanceImage(instance.id))}
-                    className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                    className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft disabled:opacity-60"
                   >
                     Cambiar
                   </button>
@@ -358,7 +358,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 <button
                   disabled={customizing}
                   onClick={() => handleCustomize(() => window.tenso.customizeInstanceBackground(instance.id))}
-                  className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                  className="flex-1 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft disabled:opacity-60"
                 >
                   Cambiar fondo
                 </button>
@@ -457,7 +457,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </span>
                 <button
                   onClick={() => { setShowOpts(false); onChangeVariant() }}
-                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
                 >
                   Cambiar
                 </button>
@@ -474,7 +474,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </span>
                 <button
                   onClick={() => { setShowOpts(false); onChangeConnection() }}
-                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-tenso-accent-soft"
+                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
                 >
                   Cambiar
                 </button>
@@ -574,7 +574,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 <button
                   onClick={handleReport}
                   disabled={reporting}
-                  className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft disabled:opacity-60"
+                  className="rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft disabled:opacity-60"
                 >
                   {reporting ? 'Subiendo…' : reportUrl ? 'Crear de nuevo' : 'Crear enlace'}
                 </button>
@@ -609,7 +609,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
               </button>
               <button
                 onClick={handleRepair}
-                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
+                className="rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft"
               >
                 Reparar
               </button>
@@ -645,7 +645,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
               </button>
               <button
                 onClick={handleDeepClean}
-                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-white hover:bg-tenso-accent-soft"
+                className="rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft"
               >
                 Limpiar todo
               </button>
@@ -663,7 +663,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
             <h1 className="flex items-center gap-2 truncate text-lg font-bold">
               {instance.name}
               {instance.version && (
-                <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft shadow-[0_0_8px_rgba(166,77,252,0.35)]">
+                <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft">
                   v{instance.version}
                 </span>
               )}
@@ -689,7 +689,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 <span className="text-sm break-words text-tenso-accent-soft">{error}</span>
               ) : (
                 <span className="flex items-center gap-1.5 text-xs text-tenso-muted">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-tenso-accent shadow-[0_0_6px_rgba(166,77,252,0.7)]" />
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-tenso-accent" />
                   Listo para jugar
                 </span>
               )}
@@ -700,7 +700,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 data-tour="play"
                 onClick={handlePlay}
                 disabled={busy}
-                className="flex-1 rounded-xl bg-gradient-to-r from-tenso-accent to-tenso-accent-soft py-2.5 font-bold tracking-wide text-white shadow-lg shadow-tenso-accent/30 transition-all hover:scale-[1.02] hover:shadow-tenso-accent/50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none disabled:hover:scale-100"
+                className="flex-1 rounded-lg bg-tenso-accent py-2.5 font-bold tracking-wide text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {busy
                   ? progress.stage === 'running'

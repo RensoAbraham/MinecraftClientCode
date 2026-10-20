@@ -4,7 +4,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { AwsClient } from 'aws4fetch'
 import type { R2ConfigInput, R2ConfigView } from '../../shared/ipc'
-import { isExcludedPath } from '../../shared/publisher'
 
 /**
  * Subida de modpacks a Cloudflare R2 (S3-compatible) usando aws4fetch.
@@ -252,19 +251,6 @@ export async function clearBucket(onProgress?: DeleteProgress): Promise<{ delete
   return { deleted: await deleteKeys(keys, onProgress) }
 }
 
-function walk(dir: string, root: string, acc: string[] = []): string[] {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) walk(full, root, acc)
-    else {
-      const rel = path.relative(root, full).split(path.sep).join('/')
-      // No subir metadatos internos, mods desactivados (.disabled) ni carpetas excluidas.
-      if (rel !== 'instance.json' && !rel.endsWith('.disabled') && !isExcludedPath(rel)) acc.push(rel)
-    }
-  }
-  return acc
-}
-
 /** Sube un grupo completo (group.json + instancias publicadas + sus archivos). */
 export async function uploadGroup(
   root: string,
@@ -302,15 +288,32 @@ export async function uploadGroup(
     instances: { id: string }[]
   }
 
-  // Lista de objetos a subir: group.json + (modpack.json + files) por instancia.
+  // Lista de objetos a subir: metadatos y solo archivos cuya URL pertenece a R2.
+  // Los mods intactos de un .mrpack se descargan desde su origen Modrinth/GitHub.
   const tasks: { key: string; file: string }[] = [
     { key: `${groupId}/group.json`, file: path.join(groupDir, 'group.json') },
   ]
   for (const inst of group.instances) {
     const instDir = path.join(groupDir, inst.id)
-    for (const rel of walk(instDir, instDir)) {
-      const key = rel === 'modpack.json' ? `${groupId}/${inst.id}/modpack.json` : `${groupId}/${inst.id}/files/${rel}`
-      tasks.push({ key, file: path.join(instDir, rel) })
+    const manifestPath = path.join(instDir, 'modpack.json')
+    tasks.push({ key: `${groupId}/${inst.id}/modpack.json`, file: manifestPath })
+
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+      files: { name: string; path: string; url: string }[]
+    }
+    const r2Prefix = `${c.publicUrl.replace(/\/$/, '')}/${groupId}/${inst.id}/files/`
+    for (const entry of manifest.files ?? []) {
+      if (!entry.url.startsWith(r2Prefix)) continue
+      const rel = `${entry.path ?? ''}${entry.name}`
+      const file = path.join(instDir, ...rel.split('/'))
+      if (fs.existsSync(file)) tasks.push({ key: `${groupId}/${inst.id}/files/${rel}`, file })
+    }
+
+    // options.txt se distribuye solo en el primer arranque y no forma parte del
+    // manifiesto sincronizado, por eso se añade de manera explícita.
+    const optionsPath = path.join(instDir, 'options.txt')
+    if (fs.existsSync(optionsPath)) {
+      tasks.push({ key: `${groupId}/${inst.id}/files/options.txt`, file: optionsPath })
     }
   }
 
@@ -335,5 +338,15 @@ export async function uploadGroup(
     uploaded++
     done++
   }
-  onProgress?.(done, tasks.length, `completado · ${uploaded} subidos, ${skipped} sin cambios`)
+
+  // Mantiene el prefijo como espejo exacto. Esto elimina versiones antiguas y,
+  // al migrar a descarga híbrida, libera las copias de mods que ya no hacen falta.
+  const expectedKeys = new Set(tasks.map((task) => task.key))
+  const staleKeys = [...remote.keys()].filter((key) => !expectedKeys.has(key))
+  const deleted = await deleteKeys(staleKeys)
+  onProgress?.(
+    done,
+    tasks.length,
+    `completado · ${uploaded} subidos, ${skipped} sin cambios, ${deleted} antiguos eliminados`,
+  )
 }
