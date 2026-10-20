@@ -2,7 +2,13 @@ import { app, dialog, shell, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { DevGroup, NewInstance } from '../../shared/ipc'
+import extract from 'extract-zip'
+import type {
+  DevContentImportResult,
+  DevContentKind,
+  DevGroup,
+  NewInstance,
+} from '../../shared/ipc'
 import { encodeGroupCode } from '../../shared/instance-code'
 import { publishGroup, listGroupIds, EXCLUDED_TOP } from '../../shared/publisher'
 import * as r2 from './r2'
@@ -200,6 +206,191 @@ export function pullGameConfig(groupId: string, instanceId: string): { copied: n
 /** Abre la carpeta de una instancia en el explorador del sistema. */
 export async function openInstanceFolder(groupId: string, instanceId: string): Promise<void> {
   await shell.openPath(path.join(modpackRoot(), groupId, instanceId))
+}
+
+const CONFIG_EXTENSIONS = new Set([
+  '.cfg',
+  '.conf',
+  '.ini',
+  '.js',
+  '.json',
+  '.json5',
+  '.jsonc',
+  '.properties',
+  '.snbt',
+  '.toml',
+  '.txt',
+  '.yaml',
+  '.yml',
+])
+
+function assertContentKind(kind: string): asserts kind is DevContentKind {
+  if (kind !== 'mod' && kind !== 'resourcepack' && kind !== 'config') {
+    throw new Error('El tipo de contenido no es válido.')
+  }
+}
+
+function emptyImportResult(): DevContentImportResult {
+  return { imported: [], replaced: [], rejected: [], cancelled: false }
+}
+
+function instanceDir(groupId: string, instanceId: string): string {
+  const root = path.resolve(modpackRoot())
+  const dir = path.resolve(root, groupId, instanceId)
+  if (dir !== root && !dir.startsWith(`${root}${path.sep}`)) {
+    throw new Error('La ruta de la instancia no es válida.')
+  }
+  if (!fs.existsSync(path.join(dir, 'instance.json'))) {
+    throw new Error('No se encontró la instancia seleccionada.')
+  }
+  return dir
+}
+
+async function isResourcePack(file: string): Promise<boolean> {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'paput-resourcepack-'))
+  try {
+    await extract(file, { dir: temp })
+    return fs.existsSync(path.join(temp, 'pack.mcmeta'))
+  } catch {
+    return false
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true })
+  }
+}
+
+type PendingCopy = { source: string; destination: string; display: string }
+
+async function prepareContent(
+  base: string,
+  kind: DevContentKind,
+  sourcePaths: string[],
+  result: DevContentImportResult,
+): Promise<PendingCopy[]> {
+  const copies: PendingCopy[] = []
+  for (const sourcePath of [...new Set(sourcePaths.map((item) => path.resolve(item)))]) {
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(sourcePath)
+    } catch {
+      result.rejected.push(`${path.basename(sourcePath)}: no se pudo leer`)
+      continue
+    }
+
+    const name = path.basename(sourcePath)
+    const extension = path.extname(name).toLowerCase()
+    if (kind === 'mod') {
+      if (!stat.isFile() || extension !== '.jar') {
+        result.rejected.push(`${name}: se esperaba un mod .jar`)
+        continue
+      }
+      copies.push({ source: sourcePath, destination: path.join(base, 'mods', name), display: `mods/${name}` })
+      continue
+    }
+
+    if (kind === 'resourcepack') {
+      if (!stat.isFile() || extension !== '.zip' || !(await isResourcePack(sourcePath))) {
+        result.rejected.push(`${name}: debe ser un .zip con pack.mcmeta en la raíz`)
+        continue
+      }
+      copies.push({
+        source: sourcePath,
+        destination: path.join(base, 'resourcepacks', name),
+        display: `resourcepacks/${name}`,
+      })
+      continue
+    }
+
+    if (stat.isDirectory()) {
+      const knownRoot = name === 'config' || name === 'defaultconfigs'
+      const destination = knownRoot ? path.join(base, name) : path.join(base, 'config', name)
+      copies.push({ source: sourcePath, destination, display: path.relative(base, destination) })
+    } else if (stat.isFile() && CONFIG_EXTENSIONS.has(extension)) {
+      copies.push({
+        source: sourcePath,
+        destination: path.join(base, 'config', name),
+        display: `config/${name}`,
+      })
+    } else {
+      result.rejected.push(`${name}: formato de configuración no admitido`)
+    }
+  }
+  return copies.filter((copy) => {
+    const source = path.resolve(copy.source)
+    const destination = path.resolve(copy.destination)
+    const sourceIsDirectory = fs.statSync(source).isDirectory()
+    if (source === destination || (sourceIsDirectory && destination.startsWith(`${source}${path.sep}`))) {
+      result.rejected.push(`${path.basename(source)}: ya está dentro de la ubicación administrada`)
+      return false
+    }
+    return true
+  })
+}
+
+/** Copia archivos escogidos o soltados al área administrada de una instancia. */
+export async function importContentPaths(
+  window: BrowserWindow | null,
+  groupId: string,
+  instanceId: string,
+  kind: DevContentKind,
+  sourcePaths: string[],
+): Promise<DevContentImportResult> {
+  assertContentKind(kind)
+  const result = emptyImportResult()
+  if (sourcePaths.length === 0) return result
+
+  const base = instanceDir(groupId, instanceId)
+  const copies = await prepareContent(base, kind, sourcePaths, result)
+  const replacing = copies.filter((copy) => fs.existsSync(copy.destination))
+  if (replacing.length > 0) {
+    const shown = replacing.slice(0, 6).map((copy) => `• ${copy.display}`).join('\n')
+    const extra = replacing.length > 6 ? `\n…y ${replacing.length - 6} más` : ''
+    const answer = await dialog.showMessageBox(window ?? undefined!, {
+      type: 'warning',
+      title: 'Confirmar cambios',
+      message: `Ya existe ${replacing.length === 1 ? 'este elemento' : 'parte de este contenido'}.`,
+      detail: `${shown}${extra}\n\nLos archivos con el mismo nombre se reemplazarán; los demás se conservarán.`,
+      buttons: ['Cancelar', 'Continuar'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+    if (answer.response !== 1) return { ...result, cancelled: true }
+  }
+
+  for (const copy of copies) {
+    const existed = fs.existsSync(copy.destination)
+    fs.mkdirSync(path.dirname(copy.destination), { recursive: true })
+    if (fs.statSync(copy.source).isDirectory()) {
+      fs.cpSync(copy.source, copy.destination, { recursive: true, force: true })
+    } else {
+      fs.copyFileSync(copy.source, copy.destination)
+    }
+    result.imported.push(copy.display)
+    if (existed) result.replaced.push(copy.display)
+  }
+  return result
+}
+
+/** Abre un selector nativo y agrega contenido sin obligar a abrir carpetas. */
+export async function addContent(
+  window: BrowserWindow | null,
+  groupId: string,
+  instanceId: string,
+  kind: DevContentKind,
+): Promise<DevContentImportResult> {
+  assertContentKind(kind)
+  const labels: Record<DevContentKind, { title: string; extensions: string[] }> = {
+    mod: { title: 'Agregar mods', extensions: ['jar'] },
+    resourcepack: { title: 'Agregar paquetes de recursos', extensions: ['zip'] },
+    config: { title: 'Agregar archivos de configuración', extensions: [...CONFIG_EXTENSIONS].map((ext) => ext.slice(1)) },
+  }
+  const selection = await dialog.showOpenDialog(window ?? undefined!, {
+    title: labels[kind].title,
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: labels[kind].title, extensions: labels[kind].extensions }],
+  })
+  if (selection.canceled) return { ...emptyImportResult(), cancelled: true }
+  return importContentPaths(window, groupId, instanceId, kind, selection.filePaths)
 }
 
 /** Convierte un nombre en un id seguro para carpeta (slug). */

@@ -144,6 +144,17 @@ export interface MrImportSummary {
   externalBytes: number
 }
 
+/** Categoría administrada por la carga rápida de Paput Studio. */
+export type DevContentKind = 'mod' | 'resourcepack' | 'config'
+
+/** Resultado de copiar contenido suelto a una instancia de Studio. */
+export interface DevContentImportResult {
+  imported: string[]
+  replaced: string[]
+  rejected: string[]
+  cancelled: boolean
+}
+
 /** Datos para crear una instancia desde Paput Studio. */
 export interface NewInstance {
   name: string
@@ -398,6 +409,21 @@ export interface TensoApi {
   onDevImportProgress(cb: (p: { label: string; fraction: number }) => void): () => void
   /** Abre la carpeta de la instancia en el explorador (para arrastrar mods). */
   devOpenFolder(groupId: string, instanceId: string): Promise<void>
+  /** Abre el selector y agrega archivos sueltos al destino administrado. */
+  devAddContent(
+    groupId: string,
+    instanceId: string,
+    kind: DevContentKind,
+  ): Promise<DevContentImportResult>
+  /** Importa rutas obtenidas de un arrastre local en Studio. */
+  devImportContentPaths(
+    groupId: string,
+    instanceId: string,
+    kind: DevContentKind,
+    paths: string[],
+  ): Promise<DevContentImportResult>
+  /** Obtiene la ruta local de un File soltado; no lee ni copia el archivo. */
+  getPathForFile(file: File): string
   /** Lista los mods de una instancia con su estado (activado/desactivado) y peso (bytes). */
   devListMods(groupId: string, instanceId: string): Promise<{ name: string; enabled: boolean; bytes: number }[]>
   /** Activa/desactiva un mod (renombra .jar <-> .jar.disabled, sin borrarlo). */
@@ -483,6 +509,8 @@ export const IPC = {
   devImportMrpack: 'tenso:devImportMrpack',
   devImportProgress: 'tenso:devImportProgress', // canal de eventos (send)
   devOpenFolder: 'tenso:devOpenFolder',
+  devAddContent: 'tenso:devAddContent',
+  devImportContentPaths: 'tenso:devImportContentPaths',
   devListMods: 'tenso:devListMods',
   devSetModEnabled: 'tenso:devSetModEnabled',
   devPullGameConfig: 'tenso:devPullGameConfig',

@@ -208,6 +208,14 @@ export function DevPanel({ onClose }: DevPanelProps) {
     setDirty(true)
   }
 
+  async function contentChanged(groupId: string, instanceId: string) {
+    setDirty(true)
+    if (modsFor?.groupId === groupId && modsFor.instanceId === instanceId) {
+      setMods(await window.tenso.devListMods(groupId, instanceId))
+    }
+    await reload()
+  }
+
   async function pullGameConfig(groupId: string, instanceId: string) {
     const { copied } = await window.tenso.devPullGameConfig(groupId, instanceId)
     setPullMsg(copied > 0 ? `Traídos ${copied} archivos de config del juego.` : 'No había config del juego que traer.')
@@ -701,10 +709,13 @@ export function DevPanel({ onClose }: DevPanelProps) {
                             {/* Gestor de recursos (mods / packs / configs) de la instancia */}
                             {modsFor?.groupId === g.id && modsFor.instanceId === inst.id && (
                               <ResourceManager
+                                groupId={g.id}
+                                instanceId={inst.id}
                                 instanceName={inst.name}
                                 mods={mods}
                                 onToggle={toggleMod}
                                 onOpenFolder={() => window.tenso.devOpenFolder(g.id, inst.id)}
+                                onContentChanged={() => contentChanged(g.id, inst.id)}
                               />
                             )}
                           </div>

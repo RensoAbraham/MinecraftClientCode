@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC, type TensoApi, type Progress } from '../shared/ipc'
 
 // Expone una API mínima y tipada en window.tenso.
@@ -95,6 +95,11 @@ const api: TensoApi = {
   },
   devOpenFolder: (groupId, instanceId) =>
     ipcRenderer.invoke(IPC.devOpenFolder, groupId, instanceId),
+  devAddContent: (groupId, instanceId, kind) =>
+    ipcRenderer.invoke(IPC.devAddContent, groupId, instanceId, kind),
+  devImportContentPaths: (groupId, instanceId, kind, paths) =>
+    ipcRenderer.invoke(IPC.devImportContentPaths, groupId, instanceId, kind, paths),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   devListMods: (groupId, instanceId) => ipcRenderer.invoke(IPC.devListMods, groupId, instanceId),
   devSetModEnabled: (groupId, instanceId, name, enabled) =>
     ipcRenderer.invoke(IPC.devSetModEnabled, groupId, instanceId, name, enabled),

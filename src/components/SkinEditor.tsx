@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { SkinViewer } from 'skinview3d'
 import { IdleGesturesAnimation } from './skinAnimation'
 import type { Account, SavedSkin, PlayerCape } from '../../shared/ipc'
@@ -12,7 +12,74 @@ interface SkinEditorProps {
  * Editor de skins con visor 3D (skinview3d): render rotable y animado, galería
  * de skins guardadas y aplicar a la cuenta (premium). Estilo Modrinth.
  */
-export function SkinEditor({ account, onClose }: SkinEditorProps) {
+export function SkinEditor(props: SkinEditorProps) {
+  if (!props.account.premium) return <OfflineSkinGuide {...props} />
+  return <PremiumSkinEditor {...props} />
+}
+
+function OfflineSkinGuide({ account, onClose }: SkinEditorProps) {
+  const openCatalog = () => window.tenso.openExternal('https://es.namemc.com/minecraft-skins')
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <section
+        className="anim-fade-in-scale w-[560px] max-w-[94vw] overflow-hidden rounded-2xl border border-tenso-border bg-tenso-panel shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-tenso-border px-6 py-5">
+          <div>
+            <p className="text-[11px] font-bold tracking-[0.18em] text-tenso-accent-soft uppercase">Apariencia en el servidor</p>
+            <h2 className="mt-1 text-xl font-bold text-tenso-text">Elige una skin para {account.name}</h2>
+            <p className="mt-1 text-sm text-tenso-muted">Las cuentas no premium aplican su apariencia dentro del servidor.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-tenso-muted hover:bg-tenso-panel-2 hover:text-tenso-text">
+            Cerrar
+          </button>
+        </header>
+
+        <div className="space-y-3 p-6">
+          <GuideStep number="1" title="Busca una skin en NameMC">
+            Abre el catálogo y entra en la skin que quieras usar.
+          </GuideStep>
+          <GuideStep number="2" title="Copia el nombre del perfil">
+            Copia el nombre del jugador que aparece asociado a esa skin; la skin no tiene un nombre propio.
+          </GuideStep>
+          <GuideStep number="3" title="Aplícala dentro de Minecraft">
+            Cuando esté disponible el sistema de skins del servidor, escribe:
+            <code className="mt-2 block rounded-lg border border-tenso-border bg-tenso-bg px-3 py-2 font-mono text-sm text-tenso-accent-soft">/skin nombre_del_perfil</code>
+          </GuideStep>
+
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs leading-relaxed text-tenso-muted">
+            Importar un PNG solo en el launcher no haría que otros jugadores lo vean. Paput mostrará el comando como activo cuando el servidor tenga instalado el sistema de skins.
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="rounded-lg border border-tenso-border px-4 py-2 text-sm font-semibold text-tenso-muted hover:text-tenso-text">
+              Ahora no
+            </button>
+            <button onClick={openCatalog} className="rounded-lg bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft">
+              Explorar skins
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function GuideStep({ number, title, children }: { number: string; title: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-3 rounded-xl border border-tenso-border bg-tenso-panel-2/55 p-4">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-tenso-accent text-xs font-black text-[#17120a]">{number}</span>
+      <div>
+        <p className="text-sm font-bold text-tenso-text">{title}</p>
+        <div className="mt-1 text-xs leading-relaxed text-tenso-muted">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function PremiumSkinEditor({ account, onClose }: SkinEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const viewerRef = useRef<SkinViewer | null>(null)
 
@@ -248,13 +315,6 @@ export function SkinEditor({ account, onClose }: SkinEditorProps) {
             </button>
           </div>
 
-          {!account.premium && (
-            <p className="mb-3 rounded-lg bg-tenso-panel-2 p-2 text-xs text-tenso-muted">
-              La cuenta activa es no premium: puedes ver y guardar skins, pero aplicarlas requiere
-              una cuenta premium de Microsoft.
-            </p>
-          )}
-
           <p className="mb-2 text-xs font-semibold tracking-wide text-tenso-muted uppercase">Skins guardadas</p>
           <div className="grid flex-1 auto-rows-min grid-cols-4 gap-2 overflow-y-auto">
             <button
@@ -336,7 +396,7 @@ export function SkinEditor({ account, onClose }: SkinEditorProps) {
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={apply}
-              disabled={busy || !selected?.id || !account.premium}
+              disabled={busy || !selected?.id}
               className="rounded-lg bg-tenso-accent px-6 py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? 'Aplicando…' : 'Aplicar a mi cuenta'}

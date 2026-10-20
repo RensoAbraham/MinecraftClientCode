@@ -163,6 +163,12 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null) {
       dev.importMrpack(getWindow(), g, (p) => getWindow()?.webContents.send(IPC.devImportProgress, p)),
     )
     ipcMain.handle(IPC.devOpenFolder, (_e, g: string, i: string) => dev.openInstanceFolder(g, i))
+    ipcMain.handle(IPC.devAddContent, (_e, g: string, i: string, kind) =>
+      dev.addContent(getWindow(), g, i, kind),
+    )
+    ipcMain.handle(IPC.devImportContentPaths, (_e, g: string, i: string, kind, paths: string[]) =>
+      dev.importContentPaths(getWindow(), g, i, kind, paths),
+    )
     ipcMain.handle(IPC.devListMods, (_e, g: string, i: string) => dev.listMods(g, i))
     ipcMain.handle(IPC.devSetModEnabled, (_e, g: string, i: string, name: string, enabled: boolean) =>
       dev.setModEnabled(g, i, name, enabled),

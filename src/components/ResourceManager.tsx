@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react'
+import type { DevContentImportResult, DevContentKind } from '../../shared/ipc'
 
 type Mod = { name: string; enabled: boolean; bytes: number }
 type Tab = 'mods' | 'rp' | 'cfg'
 
 interface ResourceManagerProps {
+  groupId: string
+  instanceId: string
   /** Nombre de la instancia destino (p. ej. "Castle Town Low"). */
   instanceName: string
   /** Mods de la instancia (del backend: nombre de archivo, estado y tamaño). */
@@ -12,6 +15,8 @@ interface ResourceManagerProps {
   onToggle: (name: string, enabled: boolean) => void
   /** Abre la carpeta de la instancia para arrastrar archivos dentro. */
   onOpenFolder: () => void
+  /** Refresca Studio y marca los cambios como pendientes de publicar. */
+  onContentChanged: () => Promise<void> | void
 }
 
 /** Paleta para los iconos de recurso (tile de color con la inicial). */
@@ -34,14 +39,23 @@ function fmtSize(bytes: number): string {
 }
 
 /**
- * Gestor de recursos de una instancia (Paput Studio): mods, paquetes de recursos y
- * configuraciones. Vista tipo Modrinth con cards e interruptor activar/desactivar.
- * Por ahora solo la pestaña de Mods está conectada al backend; el resto son
- * vistas listas para cuando se añada la integración.
+ * Gestor de recursos de una instancia (Paput Studio): recibe mods, paquetes de
+ * recursos y configuraciones. Los mods además permiten activar y desactivar.
  */
-export function ResourceManager({ instanceName, mods, onToggle, onOpenFolder }: ResourceManagerProps) {
+export function ResourceManager({
+  groupId,
+  instanceId,
+  instanceName,
+  mods,
+  onToggle,
+  onOpenFolder,
+  onContentChanged,
+}: ResourceManagerProps) {
   const [tab, setTab] = useState<Tab>('mods')
   const [q, setQ] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [importResult, setImportResult] = useState<DevContentImportResult | null>(null)
 
   const filtered = useMemo(
     () => mods.filter((m) => m.name.toLowerCase().includes(q.toLowerCase())),
@@ -51,36 +65,120 @@ export function ResourceManager({ instanceName, mods, onToggle, onOpenFolder }: 
   const activeMb = Math.round(mods.filter((m) => m.enabled).reduce((a, m) => a + m.bytes, 0) / 1024 / 1024)
 
   const dropText: Record<Tab, { title: string; hint: string }> = {
-    mods: { title: 'Arrastra mods aquí (.jar)', hint: 'Abre la carpeta y suelta los archivos dentro' },
-    rp: { title: 'Arrastra paquetes de recursos (.zip)', hint: 'El orden decide la prioridad' },
-    cfg: { title: 'Arrastra configuraciones (.toml, .json)', hint: 'Archivos o carpetas de config/' },
+    mods: { title: 'Agrega o arrastra mods (.jar)', hint: 'Se copiarán a mods/ y se publicarán solo cuando tú decidas' },
+    rp: { title: 'Agrega o arrastra paquetes (.zip)', hint: 'Validamos pack.mcmeta antes de copiarlos' },
+    cfg: { title: 'Agrega o arrastra configuraciones', hint: 'Archivos o carpetas de config/' },
+  }
+
+  const kindForTab: Record<Tab, DevContentKind> = {
+    mods: 'mod',
+    rp: 'resourcepack',
+    cfg: 'config',
+  }
+
+  async function finishImport(result: DevContentImportResult) {
+    setImportResult(result)
+    if (result.imported.length > 0) await onContentChanged()
+  }
+
+  async function chooseFiles() {
+    if (adding) return
+    setAdding(true)
+    setImportResult(null)
+    try {
+      await finishImport(await window.tenso.devAddContent(groupId, instanceId, kindForTab[tab]))
+    } catch (error) {
+      setImportResult({
+        imported: [],
+        replaced: [],
+        rejected: [error instanceof Error ? error.message : String(error)],
+        cancelled: false,
+      })
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function importDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setDragging(false)
+    if (adding) return
+    const paths = Array.from(event.dataTransfer.files)
+      .map((file) => window.tenso.getPathForFile(file))
+      .filter(Boolean)
+    if (paths.length === 0) return
+    setAdding(true)
+    setImportResult(null)
+    try {
+      await finishImport(
+        await window.tenso.devImportContentPaths(groupId, instanceId, kindForTab[tab], paths),
+      )
+    } catch (error) {
+      setImportResult({
+        imported: [],
+        replaced: [],
+        rejected: [error instanceof Error ? error.message : String(error)],
+        cancelled: false,
+      })
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  function openFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    chooseFiles()
   }
 
   return (
     <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
       {/* Pestañas */}
       <div className="mb-3 flex gap-1 border-b border-tenso-border">
-        <TabButton active={tab === 'mods'} onClick={() => setTab('mods')} label="Mods" count={mods.length} />
-        <TabButton active={tab === 'rp'} onClick={() => setTab('rp')} label="Paquetes de recursos" />
-        <TabButton active={tab === 'cfg'} onClick={() => setTab('cfg')} label="Configuraciones" />
+        <TabButton active={tab === 'mods'} onClick={() => { setTab('mods'); setImportResult(null) }} label="Mods" count={mods.length} />
+        <TabButton active={tab === 'rp'} onClick={() => { setTab('rp'); setImportResult(null) }} label="Paquetes de recursos" />
+        <TabButton active={tab === 'cfg'} onClick={() => { setTab('cfg'); setImportResult(null) }} label="Configuraciones" />
       </div>
 
-      {/* Zona de añadir (abre la carpeta para arrastrar dentro) */}
-      <button
-        onClick={onOpenFolder}
-        className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-tenso-border bg-tenso-panel/60 p-3 text-left transition-colors hover:border-tenso-accent hover:bg-tenso-accent/5"
+      {/* Zona de añadir: selector nativo y arrastre real. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={chooseFiles}
+        onKeyDown={openFromKeyboard}
+        onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
+        onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+        }}
+        onDrop={importDrop}
+        className={`group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed bg-tenso-panel/60 p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-tenso-accent/50 ${
+          dragging ? 'border-tenso-accent bg-tenso-accent/10' : 'border-tenso-border hover:border-tenso-accent hover:bg-tenso-accent/5'
+        }`}
       >
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-tenso-border bg-tenso-accent/15 text-tenso-accent-soft">
           <UploadIcon />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold">{dropText[tab].title}</span>
-          <span className="block text-xs text-tenso-muted">{dropText[tab].hint}</span>
+          <span className="block text-sm font-bold">{adding ? 'Agregando contenido…' : dropText[tab].title}</span>
+          <span className="block text-xs text-tenso-muted">{dragging ? 'Suelta para revisar e importar' : dropText[tab].hint}</span>
         </span>
-        <span className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs font-semibold text-tenso-muted group-hover:text-tenso-accent-soft">
-          Abrir carpeta
-        </span>
-      </button>
+        <button
+          onClick={(event) => { event.stopPropagation(); onOpenFolder() }}
+          className="shrink-0 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs font-semibold text-tenso-muted group-hover:text-tenso-accent-soft"
+        >
+          Ver carpeta
+        </button>
+      </div>
+
+      {importResult && !importResult.cancelled && (
+        <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${importResult.rejected.length ? 'bg-amber-500/10 text-amber-200' : 'bg-green-500/10 text-green-300'}`}>
+          {importResult.imported.length > 0 && (
+            <p>{importResult.imported.length} elemento{importResult.imported.length === 1 ? '' : 's'} agregado{importResult.imported.length === 1 ? '' : 's'}{importResult.replaced.length ? ` · ${importResult.replaced.length} reemplazado${importResult.replaced.length === 1 ? '' : 's'}` : ''}.</p>
+          )}
+          {importResult.rejected.map((message, index) => <p key={`${message}-${index}`}>No importado: {message}</p>)}
+        </div>
+      )}
 
       {/* --- Pestaña Mods (conectada) --- */}
       {tab === 'mods' && (
@@ -104,7 +202,7 @@ export function ResourceManager({ instanceName, mods, onToggle, onOpenFolder }: 
           </div>
 
           {mods.length === 0 ? (
-            <EmptyState title="No hay mods todavía" hint="Usa “Abrir carpeta” y suelta los .jar dentro." />
+            <EmptyState title="No hay mods todavía" hint="Haz clic arriba o arrastra uno o varios archivos .jar." />
           ) : filtered.length === 0 ? (
             <EmptyState title={`Sin resultados para “${q}”`} hint="Prueba con otro nombre." />
           ) : (
@@ -121,20 +219,20 @@ export function ResourceManager({ instanceName, mods, onToggle, onOpenFolder }: 
         </>
       )}
 
-      {/* --- Pestañas aún sin backend (vistas) --- */}
+      {/* Las listas detalladas se incorporarán en la reforma de Studio; la carga ya es funcional. */}
       {tab === 'rp' && (
         <div className="mt-3">
           <EmptyState
-            title="Gestor de paquetes de recursos"
-            hint={`Aquí se listarán y ordenarán los resource packs de ${instanceName}. Pendiente de conectar con el backend.`}
+            title="Paquetes administrados por la instancia"
+            hint={`Los ZIP válidos se guardan en resourcepacks/ de ${instanceName}. Los jugadores podrán conservar además sus paquetes personales.`}
           />
         </div>
       )}
       {tab === 'cfg' && (
         <div className="mt-3">
           <EmptyState
-            title="Gestor de configuraciones"
-            hint="Aquí se adjuntarán archivos y carpetas de config/, con aviso si ya existen. Pendiente de conectar."
+            title="Configuración del modpack"
+            hint="Puedes agregar archivos sueltos aquí o arrastrar una carpeta config/ o defaultconfigs/. Studio pide confirmación antes de reemplazar."
           />
         </div>
       )}
