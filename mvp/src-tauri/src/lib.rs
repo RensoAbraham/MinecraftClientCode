@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, process::Command};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -8,6 +8,7 @@ struct Launcher {
     name: &'static str,
     detected: bool,
     executable: Option<String>,
+    icon_data_url: Option<String>,
     install_mode: &'static str,
 }
 
@@ -46,6 +47,11 @@ fn definitions() -> Vec<LauncherDefinition> {
             install_mode: "Descargar e importar un pack compatible con MultiMC",
         },
         LauncherDefinition {
+            id: "sklauncher", name: "SKLauncher", executable_names: &["SKlauncher.exe", "SKLauncher.exe"],
+            candidate_dirs: vec![appdata.clone().map(|p| p.join("SKLauncher")), localappdata.clone().map(|p| p.join("Programs/SKLauncher")), program_files.clone().map(|p| p.join("SKLauncher"))].into_iter().flatten().collect(),
+            install_mode: "Preparar un perfil sin conexión o una cuenta Microsoft",
+        },
+        LauncherDefinition {
             id: "curseforge", name: "CurseForge", executable_names: &["CurseForge.exe", "curseforge.exe"],
             candidate_dirs: vec![localappdata.clone().map(|p| p.join("Programs/CurseForge")), program_files.clone().map(|p| p.join("CurseForge Windows")), program_files_x86.map(|p| p.join("Overwolf/CurseForge"))].into_iter().flatten().collect(),
             install_mode: "Abrir la página oficial del modpack en CurseForge",
@@ -59,12 +65,33 @@ fn find_executable(definition: &LauncherDefinition) -> Option<PathBuf> {
     })
 }
 
+/// Windows guarda el icono de cada launcher dentro de su ejecutable. Lo leemos
+/// localmente para que la interfaz use la imagen real sin descargar ni
+/// redistribuir marcas de terceros. Si PowerShell no está disponible, la UI usa
+/// su marca textual de respaldo.
+fn executable_icon(path: &PathBuf) -> Option<String> {
+    let escaped = path.to_string_lossy().replace('\'', "''");
+    let script = format!(
+        "Add-Type -AssemblyName System.Drawing; $i=[System.Drawing.Icon]::ExtractAssociatedIcon('{}'); if($null -ne $i){{ $b=$i.ToBitmap(); $m=New-Object IO.MemoryStream; $b.Save($m,[System.Drawing.Imaging.ImageFormat]::Png); [Convert]::ToBase64String($m.ToArray()) }}",
+        escaped,
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .ok()?;
+    if !output.status.success() { return None; }
+    let encoded = String::from_utf8(output.stdout).ok()?;
+    let encoded = encoded.trim();
+    (!encoded.is_empty()).then(|| format!("data:image/png;base64,{encoded}"))
+}
+
 /// Detecta instalaciones conocidas sin modificar archivos de ningún launcher.
 #[tauri::command]
 fn detect_launchers() -> Vec<Launcher> {
     definitions().into_iter().map(|definition| {
         let executable = find_executable(&definition);
-        Launcher { id: definition.id, name: definition.name, detected: executable.is_some(), executable: executable.map(|path| path.to_string_lossy().into_owned()), install_mode: definition.install_mode }
+        let icon_data_url = executable.as_ref().and_then(executable_icon);
+        Launcher { id: definition.id, name: definition.name, detected: executable.is_some(), executable: executable.map(|path| path.to_string_lossy().into_owned()), icon_data_url, install_mode: definition.install_mode }
     }).collect()
 }
 

@@ -3,87 +3,70 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 type AccountMode = "microsoft" | "offline";
-type Launcher = { id: string; name: string; detected: boolean; executable?: string; installMode: string; accountModes?: AccountMode[] };
-type InstallState = "ready" | "installing" | "complete";
+type Stage = "account" | "launcher" | "installing" | "complete";
+type Launcher = { id: string; name: string; detected: boolean; executable?: string; iconDataUrl?: string; installMode: string };
+
+const launcherInfo: Record<string, { mark: string; tint: string; modes: AccountMode[]; description: string }> = {
+  modrinth: { mark: "M", tint: "mint", modes: ["microsoft"], description: "Instala desde la versión publicada" },
+  prism: { mark: "P", tint: "sunset", modes: ["microsoft"], description: "Importa el modpack de forma segura" },
+  curseforge: { mark: "C", tint: "ember", modes: ["microsoft"], description: "Abre el pack en CurseForge" },
+  polymc: { mark: "◇", tint: "lime", modes: ["microsoft", "offline"], description: "Importa el pack compatible" },
+  sklauncher: { mark: "S", tint: "sky", modes: ["offline"], description: "Prepara un perfil sin conexión" },
+};
 
 const demoLaunchers: Launcher[] = [
-  { id: "prism", name: "Prism Launcher", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\PrismLauncher", installMode: "Importará el modpack con formato compatible", accountModes: ["microsoft", "offline"] },
-  { id: "modrinth", name: "Modrinth App", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\ModrinthApp", installMode: "Abrirá la versión publicada en Modrinth", accountModes: ["microsoft"] },
-  { id: "polymc", name: "PolyMC", detected: false, installMode: "Importará un pack compatible con MultiMC", accountModes: ["microsoft", "offline"] },
-  { id: "curseforge", name: "CurseForge", detected: false, installMode: "Abrirá la página oficial del modpack", accountModes: ["microsoft"] },
+  { id: "modrinth", name: "Modrinth App", detected: true, executable: "C:\\Apps\\Modrinth App", installMode: "Instala desde Modrinth" },
+  { id: "prism", name: "Prism Launcher", detected: true, executable: "C:\\Apps\\Prism Launcher", installMode: "Importa un .mrpack" },
+  { id: "curseforge", name: "CurseForge", detected: false, installMode: "Abre el pack oficial" },
+  { id: "polymc", name: "PolyMC", detected: true, executable: "C:\\Apps\\PolyMC", installMode: "Importa el modpack" },
+  { id: "sklauncher", name: "SKLauncher", detected: false, installMode: "Prepara un perfil offline" },
 ];
-
-const capabilities: Record<string, AccountMode[]> = { prism: ["microsoft", "offline"], polymc: ["microsoft", "offline"], modrinth: ["microsoft"], curseforge: ["microsoft"] };
-
-const tasks = ["Preparando el modpack", "Comprobando compatibilidad", "Importando contenido", "Guardando acceso al servidor"];
+const installTasks = ["Comprobando la versión del pack", "Preparando archivos", "Configurando el servidor", "Terminando la instalación"];
 
 export default function App() {
-  const [detected, setDetected] = useState<Launcher[]>([]);
-  const [demo, setDemo] = useState(true);
+  const [stage, setStage] = useState<Stage>("account");
   const [accountMode, setAccountMode] = useState<AccountMode>("microsoft");
-  const [selected, setSelected] = useState("prism");
-  const [state, setState] = useState<InstallState>("ready");
+  const [runtimeLaunchers, setRuntimeLaunchers] = useState<Launcher[]>([]);
+  const [demo, setDemo] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  async function scan() {
-    try { setDetected(await invoke<Launcher[]>("detect_launchers")); } catch { setDetected([]); }
-  }
+  async function scan() { try { setRuntimeLaunchers(await invoke<Launcher[]>("detect_launchers")); } catch { setRuntimeLaunchers([]); } }
   useEffect(() => { void scan(); }, []);
+  const launchers = demo ? demoLaunchers : runtimeLaunchers;
+  const compatible = useMemo(() => launchers.filter((launcher) => launcherInfo[launcher.id]?.modes.includes(accountMode)), [accountMode, launchers]);
+  const installed = compatible.filter((launcher) => launcher.detected);
+  const active = installed.find((launcher) => launcher.id === selected) ?? installed[0] ?? null;
 
-  const launchers = useMemo(() => (demo ? demoLaunchers : detected).map((launcher) => ({ ...launcher, accountModes: launcher.accountModes ?? capabilities[launcher.id] ?? ["microsoft"] })), [demo, detected]);
-  const compatible = useMemo(() => launchers.filter((launcher) => launcher.accountModes?.includes(accountMode)), [accountMode, launchers]);
-  const active = compatible.find((launcher) => launcher.id === selected) ?? compatible.find((launcher) => launcher.detected);
-  useEffect(() => { if (active && active.id !== selected) setSelected(active.id); }, [active, selected]);
-
-  function simulate() {
-    setState("installing"); setProgress(0);
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const next = Math.min(current + 4, 100);
-        if (next === 100) { window.clearInterval(timer); setState("complete"); }
-        return next;
-      });
-    }, 125);
+  function chooseAccount(mode: AccountMode) { setAccountMode(mode); setSelected(null); setStage("launcher"); }
+  function simulateInstall() {
+    setProgress(0); setStage("installing");
+    const timer = window.setInterval(() => setProgress((value) => {
+      const next = Math.min(value + 4, 100);
+      if (next === 100) { window.clearInterval(timer); setStage("complete"); }
+      return next;
+    }), 115);
   }
+  function restart() { setStage("account"); setSelected(null); setProgress(0); }
+  const taskIndex = Math.min(Math.floor(progress / 25), installTasks.length - 1);
 
-  function reset() { setState("ready"); setProgress(0); }
-  const completedTasks = Math.floor((progress / 100) * tasks.length);
+  return <div className="installer">
+    <header className="app-header"><button className="wordmark" onClick={restart}><b>tenso</b><span>installer</span></button><div className="header-actions"><label><input type="checkbox" checked={demo} onChange={(event) => setDemo(event.target.checked)} /> Modo demo</label><span>v0.1.0</span></div></header>
+    <main>
+      {stage === "account" && <section className="account-screen screen-enter">
+        <div className="hero-art"><span className="moon" /><span className="star one">✦</span><span className="star two">·</span><span className="land" /></div>
+        <p className="eyebrow">MIDNIGHT VALLEY · 1.0.0</p><h1>Antes de empezar,<br />¿cómo juegas?</h1><p className="intro">Te mostraremos solamente launchers compatibles contigo. Sin configuraciones que no necesitas.</p>
+        <div className="account-options"><button onClick={() => chooseAccount("microsoft")}><span className="option-symbol">◆</span><strong>Tengo Minecraft</strong><small>Usaré mi cuenta Microsoft</small><i>→</i></button><button onClick={() => chooseAccount("offline")}><span className="option-symbol">◇</span><strong>Perfil sin conexión</strong><small>Jugaré en un servidor compatible</small><i>→</i></button></div>
+      </section>}
 
-  return (
-    <div className="app-shell">
-      <aside>
-        <div className="brand"><span className="brand-mark">T</span><div><strong>TENSO</strong><small>INSTALLER</small></div></div>
-        <div className="side-copy"><p className="eyebrow">TU MODPACK</p><h2>Todo listo<br />para jugar.</h2><p>Instala una experiencia compartida en el launcher que ya usas.</p></div>
-        <div className="side-footer"><span className="pulse" /> MVP EN PRUEBAS <small>v0.1.0</small></div>
-      </aside>
+      {stage === "launcher" && <section className="launcher-screen screen-enter">
+        <button className="back" onClick={() => setStage("account")}>← Volver</button><div className="screen-head"><div><p className="eyebrow">02 — ELIGE UN LAUNCHER</p><h1>¿Dónde lo<br />instalamos?</h1></div><div className="mini-pack"><span>✦</span><div><strong>Midnight Valley</strong><small>1.21.1 · NeoForge</small></div></div></div>
+        {installed.length > 0 ? <><div className="launcher-grid">{installed.map((launcher) => <button key={launcher.id} onClick={() => setSelected(launcher.id)} className={`launcher-card ${active?.id === launcher.id ? "is-selected" : ""}`}>{launcher.iconDataUrl ? <img className="launcher-logo real-logo" src={launcher.iconDataUrl} alt="" /> : <span className={`launcher-logo ${launcherInfo[launcher.id].tint}`}>{launcherInfo[launcher.id].mark}</span>}<strong>{launcher.name}</strong><small>{launcherInfo[launcher.id].description}</small><em>{active?.id === launcher.id ? "Seleccionado" : "Elegir"}</em></button>)}</div><div className="bottom-action"><p>{accountMode === "offline" ? "Podrás usar un perfil sin conexión compatible con tu servidor." : "Conectarás tu cuenta Microsoft desde el launcher elegido."}</p><button className="primary" onClick={simulateInstall}>Continuar <span>→</span></button></div></> : <div className="empty-state"><span className="empty-orbit">✦</span><h2>No encontramos un launcher compatible.</h2><p>Instala uno y vuelve aquí. Tenso no instalará nada en carpetas desconocidas.</p><div><button onClick={() => void scan()}>Buscar otra vez</button><button className="primary" onClick={() => window.open(accountMode === "offline" ? "https://sklauncher.pl/" : "https://prismlauncher.org/download/", "_blank")}>Ver opciones de descarga <span>↗</span></button></div></div>}
+      </section>}
 
-      <main>
-        <div className="topbar"><p className="eyebrow">BIBLIOTECA / MINECRAFT</p><label className="demo-switch"><input type="checkbox" checked={demo} onChange={(event) => setDemo(event.target.checked)} /> <span>Modo demo</span></label></div>
+      {stage === "installing" && <section className="install-screen screen-enter"><p className="eyebrow">03 — PREPARANDO {active?.name.toUpperCase()}</p><h1>Todo está<br />tomando forma.</h1><p className="intro">Esta instalación es una demostración: no se está modificando ningún archivo.</p><div className="progress-block"><div><strong>{progress}</strong><small>%</small></div><span className="progress-line"><i style={{ width: `${progress}%` }} /></span><p>{installTasks[taskIndex]}</p></div><ol>{installTasks.map((task, index) => <li className={index < taskIndex ? "done" : index === taskIndex ? "doing" : ""} key={task}><span>{index < taskIndex ? "✓" : `0${index + 1}`}</span>{task}</li>)}</ol></section>}
 
-        {state === "ready" && <section className="screen ready-screen">
-          <div className="heading"><p className="kicker">01 — PREPARA TU INSTALACIÓN</p><h1>Tu mundo,<br />tu launcher.</h1><p>Elige cómo juegas y te mostraremos únicamente los destinos que no te van a confundir.</p></div>
-          <div className="account-choice"><p className="eyebrow">TIPO DE CUENTA</p><div className="account-tabs"><button className={accountMode === "microsoft" ? "active" : ""} onClick={() => setAccountMode("microsoft")}><span>◆</span><strong>Tengo Minecraft</strong><small>Cuenta Microsoft</small></button><button className={accountMode === "offline" ? "active" : ""} onClick={() => setAccountMode("offline")}><span>◇</span><strong>No tengo cuenta premium</strong><small>Perfil sin conexión</small></button></div></div>
-          <div className="pack-feature"><div className="pack-cover"><span>✦</span><i /></div><div><p className="eyebrow">MODPACK SELECCIONADO</p><h3>Midnight Valley</h3><p>Un valle nocturno para explorar con tus amigos.</p><div className="pack-tags"><span>Minecraft 1.21.1</span><span>NeoForge</span><span>v1.0.0</span></div></div></div>
-          <div className="launcher-list">
-            {compatible.map((launcher) => <button key={launcher.id} className={`launcher-row ${selected === launcher.id ? "selected" : ""} ${!launcher.detected ? "unavailable" : ""}`} onClick={() => launcher.detected && setSelected(launcher.id)} disabled={!launcher.detected}>
-              <span className="launcher-icon">{launcher.name.charAt(0)}</span><span className="launcher-details"><strong>{launcher.name}</strong><small>{launcher.detected ? launcher.executable : "No se encontró en este equipo"}</small></span><span className="selection-dot" aria-hidden="true" />
-            </button>)}
-          </div>
-          <div className="action-row"><p>{active ? `Instalación preparada para ${active.name}` : "Activa el modo demo o instala un launcher para continuar."}</p><button className="primary-action" onClick={simulate} disabled={!active}>Simular instalación <span>→</span></button></div>
-        </section>}
-
-        {state === "installing" && <section className="screen progress-screen">
-          <p className="kicker">02 — INSTALANDO EN {active?.name.toUpperCase()}</p><h1>Preparando<br />tu aventura.</h1><p className="lead">No cierres Tenso mientras terminamos de configurar Midnight Valley.</p>
-          <div className="progress-visual"><div className="progress-number">{progress}<small>%</small></div><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><p>{progress < 100 ? tasks[Math.min(completedTasks, tasks.length - 1)] : "Completado"}</p></div>
-          <ol className="task-list">{tasks.map((task, index) => <li key={task} className={index < completedTasks ? "done" : index === completedTasks ? "current" : ""}><span>{index < completedTasks ? "✓" : index + 1}</span>{task}</li>)}</ol>
-        </section>}
-
-        {state === "complete" && <section className="screen complete-screen">
-          <div className="complete-icon">✓</div><p className="kicker">03 — INSTALACIÓN SIMULADA</p><h1>Ya estás<br />dentro.</h1><p className="lead">Midnight Valley quedó preparado en {active?.name}. Esta es una prueba: no se descargó ni modificó ningún archivo.</p>
-          <div className="info-grid"><div><span>SERVIDOR</span><strong>play.midnightvalley.gg</strong></div><div><span>LAUNCHER</span><strong>{active?.name}</strong></div><div><span>REQUISITO</span><strong>Java 21</strong></div></div>
-          <div className="action-row"><button onClick={reset}>Volver al inicio</button><button className="primary-action" onClick={reset}>Probar de nuevo <span>↻</span></button></div>
-        </section>}
-      </main>
-    </div>
-  );
+      {stage === "complete" && <section className="complete-screen screen-enter"><div className="success-mark">✓</div><p className="eyebrow">04 — DEMOSTRACIÓN COMPLETADA</p><h1>Listo para<br />la aventura.</h1><p className="intro">En la versión real, Midnight Valley quedará preparado en {active?.name}. Ningún archivo fue cambiado en esta prueba.</p><div className="details"><div><small>SERVIDOR</small><strong>play.midnightvalley.gg</strong></div><div><small>LAUNCHER</small><strong>{active?.name}</strong></div><div><small>REQUISITO</small><strong>Java 21</strong></div></div><button className="primary" onClick={restart}>Probar otro flujo <span>↻</span></button></section>}
+    </main>
+  </div>;
 }
