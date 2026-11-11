@@ -2,21 +2,25 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-type Launcher = { id: string; name: string; detected: boolean; executable?: string; installMode: string };
+type AccountMode = "microsoft" | "offline";
+type Launcher = { id: string; name: string; detected: boolean; executable?: string; installMode: string; accountModes?: AccountMode[] };
 type InstallState = "ready" | "installing" | "complete";
 
 const demoLaunchers: Launcher[] = [
-  { id: "prism", name: "Prism Launcher", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\PrismLauncher", installMode: "Importará el modpack con formato compatible" },
-  { id: "modrinth", name: "Modrinth App", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\ModrinthApp", installMode: "Abrirá la versión publicada en Modrinth" },
-  { id: "polymc", name: "PolyMC", detected: false, installMode: "Importará un pack compatible con MultiMC" },
-  { id: "curseforge", name: "CurseForge", detected: false, installMode: "Abrirá la página oficial del modpack" },
+  { id: "prism", name: "Prism Launcher", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\PrismLauncher", installMode: "Importará el modpack con formato compatible", accountModes: ["microsoft", "offline"] },
+  { id: "modrinth", name: "Modrinth App", detected: true, executable: "C:\\Users\\Alex\\AppData\\Roaming\\ModrinthApp", installMode: "Abrirá la versión publicada en Modrinth", accountModes: ["microsoft"] },
+  { id: "polymc", name: "PolyMC", detected: false, installMode: "Importará un pack compatible con MultiMC", accountModes: ["microsoft", "offline"] },
+  { id: "curseforge", name: "CurseForge", detected: false, installMode: "Abrirá la página oficial del modpack", accountModes: ["microsoft"] },
 ];
+
+const capabilities: Record<string, AccountMode[]> = { prism: ["microsoft", "offline"], polymc: ["microsoft", "offline"], modrinth: ["microsoft"], curseforge: ["microsoft"] };
 
 const tasks = ["Preparando el modpack", "Comprobando compatibilidad", "Importando contenido", "Guardando acceso al servidor"];
 
 export default function App() {
   const [detected, setDetected] = useState<Launcher[]>([]);
   const [demo, setDemo] = useState(true);
+  const [accountMode, setAccountMode] = useState<AccountMode>("microsoft");
   const [selected, setSelected] = useState("prism");
   const [state, setState] = useState<InstallState>("ready");
   const [progress, setProgress] = useState(0);
@@ -26,8 +30,10 @@ export default function App() {
   }
   useEffect(() => { void scan(); }, []);
 
-  const launchers = useMemo(() => demo ? demoLaunchers : detected, [demo, detected]);
-  const active = launchers.find((launcher) => launcher.id === selected) ?? launchers.find((launcher) => launcher.detected);
+  const launchers = useMemo(() => (demo ? demoLaunchers : detected).map((launcher) => ({ ...launcher, accountModes: launcher.accountModes ?? capabilities[launcher.id] ?? ["microsoft"] })), [demo, detected]);
+  const compatible = useMemo(() => launchers.filter((launcher) => launcher.accountModes?.includes(accountMode)), [accountMode, launchers]);
+  const active = compatible.find((launcher) => launcher.id === selected) ?? compatible.find((launcher) => launcher.detected);
+  useEffect(() => { if (active && active.id !== selected) setSelected(active.id); }, [active, selected]);
 
   function simulate() {
     setState("installing"); setProgress(0);
@@ -55,10 +61,11 @@ export default function App() {
         <div className="topbar"><p className="eyebrow">BIBLIOTECA / MINECRAFT</p><label className="demo-switch"><input type="checkbox" checked={demo} onChange={(event) => setDemo(event.target.checked)} /> <span>Modo demo</span></label></div>
 
         {state === "ready" && <section className="screen ready-screen">
-          <div className="heading"><p className="kicker">01 — ELIGE UN DESTINO</p><h1>¿Dónde quieres<br />instalarlo?</h1><p>Detectamos tus launchers. El contenido se instala o importa en el que elijas.</p></div>
-          <div className="pack-summary"><div className="pack-orb"><span>✦</span></div><div><p className="eyebrow">MODPACK SELECCIONADO</p><h3>Midnight Valley</h3><p>Minecraft 1.21.1 · NeoForge</p></div><span className="version">1.0.0</span></div>
+          <div className="heading"><p className="kicker">01 — PREPARA TU INSTALACIÓN</p><h1>Tu mundo,<br />tu launcher.</h1><p>Elige cómo juegas y te mostraremos únicamente los destinos que no te van a confundir.</p></div>
+          <div className="account-choice"><p className="eyebrow">TIPO DE CUENTA</p><div className="account-tabs"><button className={accountMode === "microsoft" ? "active" : ""} onClick={() => setAccountMode("microsoft")}><span>◆</span><strong>Tengo Minecraft</strong><small>Cuenta Microsoft</small></button><button className={accountMode === "offline" ? "active" : ""} onClick={() => setAccountMode("offline")}><span>◇</span><strong>No tengo cuenta premium</strong><small>Perfil sin conexión</small></button></div></div>
+          <div className="pack-feature"><div className="pack-cover"><span>✦</span><i /></div><div><p className="eyebrow">MODPACK SELECCIONADO</p><h3>Midnight Valley</h3><p>Un valle nocturno para explorar con tus amigos.</p><div className="pack-tags"><span>Minecraft 1.21.1</span><span>NeoForge</span><span>v1.0.0</span></div></div></div>
           <div className="launcher-list">
-            {launchers.map((launcher) => <button key={launcher.id} className={`launcher-row ${selected === launcher.id ? "selected" : ""} ${!launcher.detected ? "unavailable" : ""}`} onClick={() => launcher.detected && setSelected(launcher.id)} disabled={!launcher.detected}>
+            {compatible.map((launcher) => <button key={launcher.id} className={`launcher-row ${selected === launcher.id ? "selected" : ""} ${!launcher.detected ? "unavailable" : ""}`} onClick={() => launcher.detected && setSelected(launcher.id)} disabled={!launcher.detected}>
               <span className="launcher-icon">{launcher.name.charAt(0)}</span><span className="launcher-details"><strong>{launcher.name}</strong><small>{launcher.detected ? launcher.executable : "No se encontró en este equipo"}</small></span><span className="selection-dot" aria-hidden="true" />
             </button>)}
           </div>
