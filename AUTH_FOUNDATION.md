@@ -1,14 +1,16 @@
 # Base de autenticación de Paput
 
-Este documento fija el límite de confianza entre Paput Client, el futuro
-backend de acceso y el mod `PaputAuth`. El launcher por sí solo no autoriza una
+Este documento fija el límite de confianza entre Paput Client, el backend de
+acceso y el mod `PaputAuth`. El launcher por sí solo no autoriza una
 conexión al servidor.
 
 ## Identidades
 
 - **Cuenta de juego:** Microsoft u offline. Permite iniciar Minecraft.
 - **Cuenta Paput:** registro remoto que reserva un nombre y define su estado.
-- **Dispositivo:** par Ed25519 generado por cada instalación del launcher.
+- **Dispositivo:** par Ed25519 generado por cada instalación del launcher. Una
+  misma instalación puede vincularse a varias cuentas, pero cada vínculo se
+  aprueba de forma independiente.
 - **Sesión de juego:** token corto emitido por el backend para una conexión.
 
 La clave privada del dispositivo se guarda cifrada con `safeStorage` y nunca se
@@ -32,12 +34,18 @@ Hasta que Worker/D1 esté conectado, todas las cuentas nuevas permanecen en
 1. El launcher crea o recupera la identidad Ed25519 del dispositivo.
 2. El jugador inicia sesión con Microsoft o elige un nombre offline.
 3. El launcher solicita vincular cuenta, nombre y clave pública.
+   Para Microsoft envía temporalmente el token de Minecraft al Worker, que
+   consulta el perfil oficial y lo descarta sin almacenarlo.
 4. Paput Studio aprueba o rechaza la solicitud.
 5. Antes de jugar, el launcher solicita una sesión corta y firma un desafío.
 6. El backend devuelve un token firmado con audiencia del servidor y expiración.
 7. El mod cliente entrega el token a `PaputAuth` durante la fase de configuración.
 8. El mod servidor verifica firma, audiencia, expiración, nombre y dispositivo.
 9. Sin verificación satisfactoria, la conexión termina antes de entrar al mundo.
+
+La ubicación del grupo oficial se incorpora al compilar mediante
+`PAPUT_GROUP_BASE_URL` y `PAPUT_GROUP_ID`. El jugador ya no pega códigos ni
+elige URLs: tras iniciar sesión, el launcher resuelve y sincroniza el contenido.
 
 ## Contrato previsto del backend
 
@@ -66,6 +74,8 @@ El token de sesión debe incluir como mínimo:
 - R2 distribuye contenido; nunca decide permisos ni guarda credenciales.
 - El nombre de Minecraft no es prueba de identidad.
 - El renderer nunca recibe claves privadas ni secretos administrativos.
+- Una solicitud marcada como Microsoft solo se acepta si Minecraft Services
+  confirma directamente el UUID y el nombre del perfil.
 - No se guarda una contraseña offline en el launcher como prueba del servidor.
 - Si se añade recuperación por contraseña, el backend guarda únicamente Argon2id.
 - Studio requiere credencial administrativa independiente de las cuentas de juego.
@@ -151,10 +161,15 @@ manifiesto publicado es la fuente de verdad de la versión instalada.
 ## Etapas
 
 1. **Completada en esta rama:** tipos, estados, identidad Ed25519 local y UI honesta.
-2. Worker + D1: solicitudes, aprobaciones y revocaciones.
-3. Integración de Studio con los endpoints administrativos.
-4. Emisión de sesiones cortas y firma del backend.
-5. Mod NeoForge `PaputAuth` cliente/servidor.
-6. Verificación selectiva de `mods/`, cuarentena y reparación solo de mods.
-7. Acción **Agregar desde Modrinth** y metadatos de origen en Studio.
-8. Retirada definitiva del acceso offline heredado sin verificación.
+2. **Implementada en esta rama:** Worker + D1 para solicitudes, aprobaciones y revocaciones.
+3. **Implementada en esta rama:** integración de Studio con los endpoints administrativos.
+4. **Implementada en esta rama:** emisión de sesiones cortas y firma Ed25519 del backend.
+5. **Implementada en esta rama:** base del mod NeoForge `PaputAuth`, puente
+   efímero launcher→juego y verificación previa al ingreso. Falta su prueba
+   integrada contra un servidor NeoForge real antes de activarlo en producción.
+6. **Completada en esta rama:** verificación selectiva de `mods/`, corrección confirmada y reinstalación solo de mods.
+7. **Implementada en esta rama:** acción **Agregar desde Modrinth**, resolución
+   de dependencias requeridas, verificación de hashes y metadatos de origen en Studio.
+8. Despliegue del Worker, secretos y esquema D1 de producción.
+9. Compilación del JAR y prueba integrada contra un servidor NeoForge real.
+10. Retirada definitiva del acceso offline heredado sin verificación.

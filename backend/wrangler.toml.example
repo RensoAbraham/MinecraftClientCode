@@ -1,0 +1,18 @@
+name = "paput-auth"
+main = "src/index.js"
+compatibility_date = "2026-10-20"
+workers_dev = true
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "paput-auth"
+database_id = "REEMPLAZAR_CON_DATABASE_ID"
+
+[vars]
+SESSION_KEY_ID = "paput-1"
+SESSION_PUBLIC_KEY = "REEMPLAZAR_CON_SPKI_BASE64URL"
+
+# ADMIN_TOKEN y SESSION_PRIVATE_KEY son secretos y se cargan con:
+# npx wrangler secret put ADMIN_TOKEN
+# npx wrangler secret put SESSION_PRIVATE_KEY

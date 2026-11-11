@@ -7,11 +7,10 @@ import { Settings } from '../../components/Settings'
 import { AccountMenu } from '../../components/AccountMenu'
 import { HomeScreen } from '../../components/HomeScreen'
 import { VariantSelect } from '../../components/VariantSelect'
-import { ConnectionSelect } from '../../components/ConnectionSelect'
 import { GuiaRapida } from '../../components/GuiaRapida'
 import { UpdateBanner } from '../../components/UpdateBanner'
 import { useProgress } from '../../hooks/useProgress'
-import type { Account, ConnectionKind, Instance } from '../../../shared/ipc'
+import type { Account, Instance } from '../../../shared/ipc'
 import type { PlayerGroup } from './types'
 
 const SkinEditor = lazy(() =>
@@ -19,17 +18,9 @@ const SkinEditor = lazy(() =>
 )
 const ALLOW_ADD_GROUP = false
 const VARIANTS_KEY = 'paput.variants'
-const CONNECTIONS_KEY = 'paput.connections'
 
 interface PlayerAppProps {
   onOpenStudio?: () => void
-}
-
-function connectionOptions(instance: Instance): ConnectionKind[] {
-  const options: ConnectionKind[] = []
-  if (instance.serverAddress) options.push('playit')
-  if (instance.tailscaleAddress) options.push('tailscale')
-  return options
 }
 
 function toGroups(instances: Instance[]): PlayerGroup[] {
@@ -60,7 +51,6 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
   const [showSkin, setShowSkin] = useState(false)
   const [adding, setAdding] = useState(false)
   const [changingVariant, setChangingVariant] = useState(false)
-  const [changingConnection, setChangingConnection] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [guideSeen, setGuideSeen] = useState(true)
   const [theme, setThemeState] = useState<'dark' | 'light'>('dark')
@@ -70,14 +60,6 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
   const [variants, setVariants] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(localStorage.getItem(VARIANTS_KEY) ?? '{}')
-    } catch {
-      return {}
-    }
-  })
-
-  const [connections, setConnections] = useState<Record<string, ConnectionKind>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CONNECTIONS_KEY) ?? '{}')
     } catch {
       return {}
     }
@@ -93,8 +75,15 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
       ])
       if (disposed) return
 
+      let resolvedAccount = activeAccount
+      if (activeAccount) {
+        const access = await window.tenso.refreshPaputAccess().catch(() => null)
+        if (access?.account) resolvedAccount = access.account
+      }
+      if (disposed) return
+
       setInstances(storedInstances)
-      setAccount(activeAccount)
+      setAccount(resolvedAccount)
       const guideDone = (settings?.guideSeen ?? false) || !!localStorage.getItem('paput.guideSeen')
       setGuideSeen(guideDone)
       const selectedTheme: 'dark' | 'light' = settings?.theme === 'light' ? 'light' : 'dark'
@@ -116,8 +105,16 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
     if (storedInstances) setInstances(storedInstances)
   }
 
+  async function refreshAccount() {
+    const access = await window.tenso.refreshPaputAccess().catch(() => null)
+    if (access?.account) setAccount(access.account)
+  }
+
   useEffect(() => {
-    const onFocus = () => refreshInstances()
+    const onFocus = () => {
+      refreshInstances()
+      refreshAccount()
+    }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
@@ -143,15 +140,6 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
     setChangingVariant(false)
   }
 
-  function chooseConnection(groupId: string, connection: ConnectionKind) {
-    setConnections((previous) => {
-      const next = { ...previous, [groupId]: connection }
-      localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(next))
-      return next
-    })
-    setChangingConnection(false)
-  }
-
   function changeTheme(nextTheme: 'dark' | 'light') {
     setThemeState(nextTheme)
     document.documentElement.dataset.theme = nextTheme
@@ -171,7 +159,6 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
   function selectGroup(id: string) {
     setSelectedGroupId(id)
     setChangingVariant(false)
-    setChangingConnection(false)
   }
 
   if (checking) return <div className="pixel-grid h-full w-full" />
@@ -190,20 +177,6 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
       : selectedGroup?.instances.find((instance) => instance.id === chosenId)
   const needsVariant =
     !!selectedGroup && selectedGroup.instances.length > 1 && (!activeInstance || changingVariant)
-
-  const availableConnections = activeInstance ? connectionOptions(activeInstance) : []
-  const chosenConnection = selectedGroup ? connections[selectedGroup.groupId] : undefined
-  const activeConnection: ConnectionKind | undefined =
-    availableConnections.length === 1
-      ? availableConnections[0]
-      : availableConnections.includes(chosenConnection!)
-        ? chosenConnection
-        : undefined
-  const needsConnection =
-    !needsVariant &&
-    !!activeInstance &&
-    availableConnections.length > 1 &&
-    (!activeConnection || changingConnection)
 
   return (
     <div className="pixel-grid flex h-full w-full">
@@ -233,23 +206,13 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
           instances={selectedGroup.instances}
           onChoose={(id) => chooseVariant(selectedGroup.groupId, id)}
         />
-      ) : needsConnection ? (
-        <ConnectionSelect
-          instance={activeInstance!}
-          onChoose={(connection) => chooseConnection(selectedGroup.groupId, connection)}
-          onChangeVariant={
-            selectedGroup.instances.length > 1 ? () => setChangingVariant(true) : undefined
-          }
-        />
       ) : (
         <InstanceScreen
           instance={activeInstance!}
-          connection={activeConnection}
+          account={account}
+          onAccountUpdated={setAccount}
           onChangeVariant={
             selectedGroup.instances.length > 1 ? () => setChangingVariant(true) : undefined
-          }
-          onChangeConnection={
-            availableConnections.length > 1 ? () => setChangingConnection(true) : undefined
           }
           onCustomized={(updated) =>
             setInstances((previous) =>
@@ -278,7 +241,7 @@ export function PlayerApp({ onOpenStudio }: PlayerAppProps) {
       {showAccounts && (
         <AccountMenu
           onClose={() => setShowAccounts(false)}
-          onChanged={() => window.tenso.getAccount().then(setAccount).catch(() => {})}
+          onChanged={() => refreshAccount()}
         />
       )}
       {showSkin && (

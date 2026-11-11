@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ConnectionKind, Instance, Progress } from '../../shared/ipc'
+import type { Account, Instance, ModIntegrityReport, Progress } from '../../shared/ipc'
 
 interface InstanceScreenProps {
   instance: Instance
-  /** Conexión elegida (PLAYIT/TAILSCALE) con la que lanzar el juego. */
-  connection?: ConnectionKind
+  account: Account
+  onAccountUpdated: (account: Account) => void
   /** Si el grupo tiene varios tipos, permite volver a elegir. */
   onChangeVariant?: () => void
-  /** Si la instancia ofrece varias conexiones, permite volver a elegir. */
-  onChangeConnection?: () => void
   /** Se llama cuando la jugadora personaliza (o restaura) la imagen/fondo. */
   onCustomized?: (updated: Instance) => void
   /** Progreso global (vive en App para sobrevivir a la navegación). */
@@ -19,11 +17,23 @@ interface InstanceScreenProps {
   onBusyChange: (busy: boolean) => void
 }
 
+function playError(error: unknown): string {
+  let text = error instanceof Error ? error.message : String(error)
+  text = text.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '')
+  if (/HTTP 404|<title>Not Found<\/title>/i.test(text)) {
+    return 'El contenido de esta instancia ya no está publicado. Vuelve a publicarlo desde Paput Studio.'
+  }
+  if (/<(?:!doctype|html|head|body)\b/i.test(text)) {
+    return 'El servidor devolvió una respuesta inválida. Revisa la publicación de esta instancia en Paput Studio.'
+  }
+  return text.length > 320 ? `${text.slice(0, 317)}…` : text
+}
+
 /**
  * Pantalla principal: marca grande de fondo y, abajo, la tarjeta de la
  * instancia con el botón JUGAR y la barra de progreso.
  */
-export function InstanceScreen({ instance, connection, onChangeVariant, onChangeConnection, onCustomized, progress, busy, onBusyChange }: InstanceScreenProps) {
+export function InstanceScreen({ instance, account, onAccountUpdated, onChangeVariant, onCustomized, progress, busy, onBusyChange }: InstanceScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [bgFailed, setBgFailed] = useState(false)
   const [paused, setPaused] = useState(() => localStorage.getItem('paput.bgPaused') === '1')
@@ -39,6 +49,8 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const [reportUrl, setReportUrl] = useState<string | null>(null)
   const [reportErr, setReportErr] = useState<string | null>(null)
   const [repairing, setRepairing] = useState(false)
+  const [integrityChecking, setIntegrityChecking] = useState(false)
+  const [integrityReport, setIntegrityReport] = useState<ModIntegrityReport | null>(null)
   const [cleanProg, setCleanProg] = useState<{ label: string; fraction: number } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [showCustomize, setShowCustomize] = useState(false)
@@ -134,16 +146,80 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
   const isLoadingGame = busy && progress.stage === 'running' && progress.fraction < 1
   const showProgress = isWorking || isLoadingGame
 
+  async function launchCheckedGame() {
+    setError(null)
+    try {
+      await window.tenso.play(instance.id)
+    } catch (err) {
+      setError(playError(err))
+    } finally {
+      onBusyChange(false)
+    }
+  }
+
   async function handlePlay() {
     if (busy) return
     onBusyChange(true)
     setError(null)
     try {
-      await window.tenso.play(instance.id, connection)
+      const access = await window.tenso.refreshPaputAccess()
+      if (access.account) onAccountUpdated(access.account)
+      const accessStatus = access.account?.accessStatus ?? account.accessStatus
+      if (access.configured && accessStatus !== 'approved') {
+        const messages = {
+          'not-enrolled': 'Primero solicita acceso Paput desde el menú de tu cuenta.',
+          pending: 'Tu solicitud todavía está pendiente de aprobación.',
+          denied: 'Esta solicitud fue rechazada. Habla con Renso antes de volver a intentarlo.',
+          revoked: 'El acceso de este dispositivo fue revocado.',
+          approved: '',
+        }
+        setError(messages[accessStatus])
+        onBusyChange(false)
+        return
+      }
+    } catch (caught) {
+      setError(`No se pudo comprobar tu acceso: ${caught instanceof Error ? caught.message : String(caught)}`)
+      onBusyChange(false)
+      return
+    }
+    setIntegrityChecking(true)
+    try {
+      const report = await window.tenso.checkInstanceMods(instance.id)
+      const requiresDecision = report.issues.some(
+        (issue) => issue.kind === 'modified' || issue.kind === 'unexpected',
+      )
+      if (requiresDecision) {
+        setIntegrityReport(report)
+        onBusyChange(false)
+        return
+      }
+    } catch {
+      // La verificación es una ayuda local. El sincronizador seguirá validando
+      // los archivos y mostrará el error de red real si no puede continuar.
+    } finally {
+      setIntegrityChecking(false)
+    }
+    await launchCheckedGame()
+  }
+
+  async function handleIntegrityFix(strategy: 'repair' | 'reinstall') {
+    setIntegrityReport(null)
+    setRepairing(true)
+    setCleanProg({
+      label: strategy === 'repair' ? 'Corrigiendo mods alterados…' : 'Preparando reinstalación de mods…',
+      fraction: -1,
+    })
+    onBusyChange(true)
+    try {
+      await window.tenso.fixInstanceMods(instance.id, strategy)
+      setRepairing(false)
+      setCleanProg(null)
+      await launchCheckedGame()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
       onBusyChange(false)
+      setRepairing(false)
+      setCleanProg(null)
     }
   }
 
@@ -275,17 +351,21 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
       </div>
 
       {/* Progreso de limpieza/reparación */}
-      {repairing && (
+      {(repairing || integrityChecking) && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl">
             <div className="mb-2 flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="anim-spin text-tenso-accent-soft" aria-hidden>
                 <path d="M21 12a9 9 0 1 1-6.22-8.56" />
               </svg>
-              <span className="text-sm font-medium">Limpiando archivos…</span>
+              <span className="text-sm font-medium">
+                {integrityChecking ? 'Verificando mods…' : 'Preparando archivos…'}
+              </span>
             </div>
             <div className="mb-1.5 flex justify-between text-xs text-tenso-muted">
-              <span className="anim-pulse truncate">{cleanProg?.label ?? 'Preparando…'}</span>
+              <span className="anim-pulse truncate">
+                {integrityChecking ? 'Comparando con la versión oficial…' : cleanProg?.label ?? 'Preparando…'}
+              </span>
               {cleanProg && cleanProg.fraction >= 0 && <span>{Math.round(cleanProg.fraction * 100)}%</span>}
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-tenso-panel-2">
@@ -293,6 +373,90 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 className={`h-full rounded-full bg-tenso-accent transition-[width] duration-200 ${!cleanProg || cleanProg.fraction < 0 ? 'anim-pulse w-1/3' : ''}`}
                 style={cleanProg && cleanProg.fraction >= 0 ? { width: `${cleanProg.fraction * 100}%` } : undefined}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mods locales distintos a la versión publicada: no permite continuar
+          silenciosamente; la jugadora decide cómo corregirlos. */}
+      {integrityReport && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="anim-fade-in-scale w-full max-w-md rounded-2xl border border-amber-400/30 bg-tenso-panel p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400/10 text-amber-300">
+                <WrenchIcon />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-tenso-text">Los mods fueron modificados</h2>
+                <p className="mt-1 text-sm text-tenso-muted">
+                  Paput encontró archivos diferentes a la versión preparada para el servidor.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <IntegrityCount
+                label="Añadidos"
+                value={integrityReport.issues.filter((issue) => issue.kind === 'unexpected').length}
+              />
+              <IntegrityCount
+                label="Alterados"
+                value={integrityReport.issues.filter((issue) => issue.kind === 'modified').length}
+              />
+              <IntegrityCount
+                label="Faltantes"
+                value={integrityReport.issues.filter((issue) => issue.kind === 'missing').length}
+              />
+            </div>
+
+            <div className="mt-3 max-h-36 overflow-y-auto rounded-xl border border-tenso-border bg-tenso-panel-2 p-2">
+              {integrityReport.issues.slice(0, 8).map((issue) => (
+                <div key={`${issue.kind}:${issue.path}`} className="flex items-center gap-2 px-2 py-1 text-xs">
+                  <span
+                    className={
+                      issue.kind === 'missing'
+                        ? 'text-sky-300'
+                        : issue.kind === 'modified'
+                          ? 'text-amber-300'
+                          : 'text-red-300'
+                    }
+                  >
+                    {issue.kind === 'missing' ? 'Falta' : issue.kind === 'modified' ? 'Alterado' : 'No permitido'}
+                  </span>
+                  <span className="min-w-0 truncate text-tenso-muted">{issue.path.replace(/^mods\//, '')}</span>
+                </div>
+              ))}
+              {integrityReport.issues.length > 8 && (
+                <p className="px-2 py-1 text-[10px] text-tenso-muted">
+                  y {integrityReport.issues.length - 8} archivos más…
+                </p>
+              )}
+            </div>
+
+            <p className="mt-3 text-xs leading-5 text-tenso-muted">
+              <strong className="text-tenso-text">Corregir</strong> elimina solo mods añadidos o alterados y recupera los oficiales al jugar. <strong className="text-tenso-text">Reinstalar</strong> rehace toda la carpeta de mods. Tus mundos, configuraciones y paquetes de recursos no se tocan.
+            </p>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => setIntegrityReport(null)}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm text-tenso-muted hover:text-tenso-text"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleIntegrityFix('reinstall')}
+                className="rounded-xl border border-tenso-border px-4 py-2 text-sm font-semibold text-tenso-muted hover:border-tenso-accent hover:text-tenso-text"
+              >
+                Reinstalar mods
+              </button>
+              <button
+                onClick={() => handleIntegrityFix('repair')}
+                className="rounded-xl bg-tenso-accent px-4 py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft"
+              >
+                Corregir y jugar
+              </button>
             </div>
           </div>
         </div>
@@ -457,23 +621,6 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                 </span>
                 <button
                   onClick={() => { setShowOpts(false); onChangeVariant() }}
-                  className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
-                >
-                  Cambiar
-                </button>
-              </div>
-            )}
-
-            {onChangeConnection && (
-              <div className="mt-3 flex items-center justify-between rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
-                <span className="text-sm">
-                  <span className="font-medium">Conexión</span>
-                  <span className="mt-0.5 block text-xs text-tenso-muted">
-                    Actual: {connection ? connection.toUpperCase() : '—'}
-                  </span>
-                </span>
-                <button
-                  onClick={() => { setShowOpts(false); onChangeConnection() }}
                   className="shrink-0 rounded-lg bg-tenso-accent px-3 py-1.5 text-xs font-bold text-[#17120a] hover:bg-tenso-accent-soft"
                 >
                   Cambiar
@@ -686,7 +833,7 @@ export function InstanceScreen({ instance, connection, onChangeVariant, onChange
                   </div>
                 </div>
               ) : error ? (
-                <span className="text-sm break-words text-tenso-accent-soft">{error}</span>
+                <span className="block max-h-24 overflow-y-auto text-sm break-words text-tenso-accent-soft">{error}</span>
               ) : (
                 <span className="flex items-center gap-1.5 text-xs text-tenso-muted">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-tenso-accent" />
@@ -759,6 +906,15 @@ function ImageIcon() {
       <circle cx="9" cy="9" r="2" />
       <path d="m21 15-4.5-4.5L5 21" />
     </svg>
+  )
+}
+
+function IntegrityCount({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-tenso-border bg-tenso-panel-2 px-2 py-2.5">
+      <p className={`text-lg font-black ${value ? 'text-amber-300' : 'text-tenso-text'}`}>{value}</p>
+      <p className="text-[10px] text-tenso-muted">{label}</p>
+    </div>
   )
 }
 

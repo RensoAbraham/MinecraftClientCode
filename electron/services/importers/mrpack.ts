@@ -2,7 +2,7 @@ import { dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import extract from 'extract-zip'
+import { safeExtractZip } from '../safe-zip'
 import type { Instance } from '../../../shared/ipc'
 import {
   MODRINTH_INDEX_FILE,
@@ -133,7 +133,7 @@ export async function importMrpackFromPath(
   // Descomprime a una carpeta temporal.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paput-mrpack-'))
   try {
-    await extract(mrpackPath, { dir: tmp })
+    await safeExtractZip(mrpackPath, tmp)
 
     const indexPath = path.join(tmp, 'modrinth.index.json')
     if (!fs.existsSync(indexPath)) {

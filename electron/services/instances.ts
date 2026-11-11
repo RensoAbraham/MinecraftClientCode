@@ -2,18 +2,21 @@ import { app, dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Instance } from '../../shared/ipc'
-import { decodeGroupCode, type GroupRef } from '../../shared/instance-code'
+import type { GroupRef } from '../../shared/instance-code'
+import { PAPUT_GROUP_BASE_URL, PAPUT_GROUP_ID } from '../config'
 
 /**
  * Servicio de instancias del lado JUGADOR (modelo por GRUPOS).
  *
- * Un "código de grupo" embebe la URL base del hosting y el id del grupo. Al
- * canjearlo, el cliente descarga `<baseUrl>/<groupId>/group.json` (lista de
- * instancias PUBLICADAS) y, por cada una, construye su `modpackUrl` para que
- * EML-Lib sincronice. Los grupos desbloqueados se guardan en disco.
+ * El launcher trae incorporados la URL del hosting y el id del grupo oficial.
+ * Descarga `<baseUrl>/<groupId>/group.json` (lista de instancias PUBLICADAS) y
+ * construye su `modpackUrl` para que EML-Lib sincronice. La resolución queda
+ * guardada en disco para poder mostrarla si la red falla temporalmente.
  */
 
 const STORE_FILE = 'player-groups.json'
+const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/
+const LOADERS = new Set<Instance['loader']>(['neoforge', 'forge', 'fabric', 'quilt', 'vanilla'])
 
 /** Metadatos de una instancia dentro de group.json (sin modpackUrl). */
 interface PublishedInstance {
@@ -23,8 +26,6 @@ interface PublishedInstance {
   loader: Instance['loader']
   loaderVersion: string
   serverAddress: string
-  tailscaleAddress?: string
-  tailscaleAuthKey?: string
   version?: string
   imageUrl?: string
   backgroundUrl?: string
@@ -69,6 +70,7 @@ function saveStore(groups: StoredGroup[]): void {
 const OVERRIDE_KINDS = { image: 'icon', background: 'background' } as const
 
 function overrideDir(instanceId: string): string {
+  if (!SAFE_ID.test(instanceId)) throw new Error('Identificador de instancia inválido.')
   return path.join(app.getPath('userData'), 'overrides', instanceId)
 }
 
@@ -122,6 +124,23 @@ async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
   const res = await fetch(`${ref.baseUrl}/${ref.groupId}/group.json?t=${bust}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`No se pudo leer el grupo (HTTP ${res.status})`)
   const group = (await res.json()) as GroupJson
+  if (!group || typeof group.name !== 'string' || !Array.isArray(group.instances)) {
+    throw new Error('El manifiesto del grupo no tiene un formato válido.')
+  }
+  if (group.name.length < 1 || group.name.length > 100) {
+    throw new Error('El nombre del grupo no es válido.')
+  }
+  for (const meta of group.instances) {
+    const valid =
+      !!meta &&
+      SAFE_ID.test(meta.id) &&
+      typeof meta.name === 'string' && meta.name.length >= 1 && meta.name.length <= 100 &&
+      typeof meta.mcVersion === 'string' && /^\d+(?:\.\d+){1,2}$/.test(meta.mcVersion) &&
+      LOADERS.has(meta.loader) &&
+      typeof meta.loaderVersion === 'string' && meta.loaderVersion.length >= 1 && meta.loaderVersion.length <= 80 &&
+      typeof meta.serverAddress === 'string' && /^(?:[A-Za-z0-9.-]+(?::\d{1,5})?)?$/.test(meta.serverAddress)
+    if (!valid) throw new Error('El manifiesto contiene una instancia inválida.')
+  }
 
   return group.instances.map((meta) => ({
     id: meta.id,
@@ -132,8 +151,6 @@ async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
     loader: meta.loader,
     loaderVersion: meta.loaderVersion,
     serverAddress: meta.serverAddress,
-    tailscaleAddress: meta.tailscaleAddress,
-    tailscaleAuthKey: meta.tailscaleAuthKey,
     version: meta.version,
     imageUrl: meta.imageUrl,
     backgroundUrl: meta.backgroundUrl,
@@ -146,14 +163,12 @@ async function resolveGroup(ref: GroupRef): Promise<Instance[]> {
 
 // --- API pública (handlers IPC) --------------------------------------------
 
-/** Canjea un código de grupo: resuelve, guarda y devuelve sus instancias. */
-export async function redeemCode(code: string): Promise<Instance[]> {
-  const ref = decodeGroupCode(code)
-  if (!ref) return []
-
+/** Instala el grupo oficial embebido en la app sin pedir referencias. */
+export async function installDefaultGroup(): Promise<Instance[]> {
+  if (!PAPUT_GROUP_BASE_URL || !SAFE_ID.test(PAPUT_GROUP_ID)) return []
+  const ref = { baseUrl: PAPUT_GROUP_BASE_URL, groupId: PAPUT_GROUP_ID }
   const instances = await resolveGroup(ref)
-
-  const groups = loadStore().filter((g) => g.groupId !== ref.groupId)
+  const groups = loadStore().filter((group) => group.groupId !== ref.groupId)
   groups.push({ ...ref, cached: instances })
   saveStore(groups)
   return instances.map(applyOverrides)

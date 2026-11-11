@@ -32,8 +32,14 @@ export default defineConfig(({ mode }) => {
       .trim()
       .replace(/^AZURE_CLIENT_ID\s*=\s*/i, '')
       .trim() || FALLBACK_CLIENT_ID
+  const paputApiUrl = (env.PAPUT_API_URL || process.env.PAPUT_API_URL || '').trim().replace(/\/$/, '')
+  const paputGroupBaseUrl = (env.PAPUT_GROUP_BASE_URL || process.env.PAPUT_GROUP_BASE_URL || '').trim().replace(/\/$/, '')
+  const paputGroupId = (env.PAPUT_GROUP_ID || process.env.PAPUT_GROUP_ID || '').trim()
   const define = {
     __AZURE_CLIENT_ID__: JSON.stringify(azureClientId),
+    __PAPUT_API_URL__: JSON.stringify(paputApiUrl),
+    __PAPUT_GROUP_BASE_URL__: JSON.stringify(paputGroupBaseUrl),
+    __PAPUT_GROUP_ID__: JSON.stringify(paputGroupId),
     __APP_VERSION__: JSON.stringify(pkg.version),
   }
 
@@ -47,7 +53,7 @@ export default defineConfig(({ mode }) => {
         // No vigilar las carpetas de modpacks ni la salida: contienen .jar
         // grandes que pueden quedar bloqueados (EBUSY) y provocan recargas
         // innecesarias al sincronizar/importar.
-        ignored: ['**/modpack/**', '**/dist-electron/**', '**/release/**'],
+        ignored: ['**/modpack/**', '**/.paput-content/**', '**/.paput-draft-snapshot/**', '**/dist-electron/**', '**/release/**'],
       },
     },
     plugins: [
@@ -61,12 +67,10 @@ export default defineConfig(({ mode }) => {
             define,
             build: {
               rollupOptions: {
-                // eml-lib es ESM y trae dependencias nativas/Node; no lo
-                // empaquetamos: se carga desde node_modules en tiempo de
-                // ejecución mediante import() dinámico.
-                // extract-zip (y su árbol: yauzl…) se deja externo para que se
-                // resuelva desde node_modules sin problemas de bundling.
-                external: ['eml-lib', 'extract-zip', 'electron-updater'],
+                // eml-lib se carga dinámicamente desde node_modules en tiempo
+                // de ejecución. electron-updater también conserva su árbol.
+                // yauzl sí se integra en el bundle principal.
+                external: ['eml-lib', 'electron-updater'],
               },
             },
           },

@@ -39,8 +39,17 @@ export function R2Manager({ onClose }: R2ManagerProps) {
     setBusy(true)
     setProgress({ label: 'Borrando…', fraction: -1 })
     try {
-      if (target === 'all') await window.tenso.r2Clear()
-      else await window.tenso.r2DeletePrefix(target)
+      if (target === 'all') {
+        await window.tenso.r2Clear()
+        // El servicio ya volvió a listar R2 y confirmó que no quedan objetos.
+        setSummary({ groups: [], total: 0 })
+      } else {
+        await window.tenso.r2DeletePrefix(target)
+        setSummary((current) => current ? {
+          groups: current.groups.filter((group) => group.prefix !== target),
+          total: Math.max(0, current.total - (current.groups.find((group) => group.prefix === target)?.count ?? 0)),
+        } : current)
+      }
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -62,7 +71,7 @@ export function R2Manager({ onClose }: R2ManagerProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Gestionar R2</h2>
+          <h2 className="text-lg font-bold text-tenso-text">Gestionar R2</h2>
           <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-tenso-muted hover:text-tenso-text">
             Cerrar
           </button>
@@ -86,7 +95,7 @@ export function R2Manager({ onClose }: R2ManagerProps) {
               {summary.groups.map((g) => (
                 <div key={g.prefix} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{g.prefix}</p>
+                    <p className="truncate font-medium text-tenso-text">{g.prefix}</p>
                     <p className="text-xs text-tenso-muted">{g.count} archivo{g.count === 1 ? '' : 's'}</p>
                   </div>
                   <button
@@ -131,7 +140,7 @@ export function R2Manager({ onClose }: R2ManagerProps) {
         {/* Confirmación */}
         {confirm && (
           <div className="mt-4 rounded-xl border border-tenso-accent/40 bg-tenso-accent/5 p-3">
-            <p className="text-sm">
+            <p className="text-sm text-tenso-text">
               {confirm === 'all' ? (
                 <>¿Vaciar <strong>todo</strong> el bucket? Se borrarán <strong>{confirmCount}</strong> objetos.</>
               ) : (

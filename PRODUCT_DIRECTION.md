@@ -23,8 +23,9 @@ La interfaz puede detectar el tipo, pero siempre permite corregirlo antes de
 confirmar. Los cambios permanecen en borrador hasta pulsar **Publicar**. La
 publicación incremental sube únicamente los archivos y manifiestos modificados.
 
-La acción **Agregar desde Modrinth** será una alternativa dentro del mismo flujo,
-no un requisito para administrar el modpack.
+La acción **Agregar desde Modrinth** es una alternativa dentro del mismo flujo:
+filtra versiones compatibles, instala dependencias requeridas y conserva las
+fuentes verificadas de Modrinth. No es un requisito para administrar el modpack.
 
 ## Contenido del jugador
 
@@ -72,6 +73,10 @@ agregar o eliminar cuentas; no se amontonan todas esas acciones en un modal.
 
 Las opciones que no aplican al tipo de cuenta se sustituyen por orientación útil
 en vez de mostrarse deshabilitadas sin explicación.
+
+El jugador no introduce códigos de instancia. El launcher conoce el grupo
+oficial y lo instala automáticamente; Studio administra qué variantes están
+publicadas, mientras PaputAuth decide quién puede entrar al servidor.
 
 ## Reforma visual
 

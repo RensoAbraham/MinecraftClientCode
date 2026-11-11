@@ -23,7 +23,7 @@ const ACCESS_LABELS: Record<PaputAccessStatus, string> = {
  */
 export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
   const [accounts, setAccounts] = useState<AccountItem[]>([])
-  const [busy, setBusy] = useState<'microsoft' | 'offline' | null>(null)
+  const [busy, setBusy] = useState<'microsoft' | 'offline' | 'access' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [offlineName, setOfflineName] = useState('')
   const validOfflineName = /^[a-zA-Z0-9_]{3,16}$/.test(offlineName.trim())
@@ -37,6 +37,7 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
 
   async function select(uuid: string) {
     await window.tenso.setActiveAccount(uuid)
+    await window.tenso.refreshPaputAccess().catch(() => null)
     await reload()
     onChanged()
   }
@@ -54,11 +55,12 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
     try {
       const a = await window.tenso.login()
       if (a) {
+        await window.tenso.requestPaputAccess().catch(() => null)
         await reload()
         onChanged()
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(cleanError(e))
     } finally {
       setBusy(null)
     }
@@ -71,16 +73,45 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
     try {
       const a = await window.tenso.loginOffline(offlineName)
       if (a) {
+        await window.tenso.requestPaputAccess().catch(() => null)
         await reload()
         onChanged()
         setOfflineName('')
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(cleanError(e))
     } finally {
       setBusy(null)
     }
   }
+
+  async function requestAccess() {
+    if (busy) return
+    setBusy('access')
+    setError(null)
+    try {
+      const result = await window.tenso.requestPaputAccess()
+      if (!result.configured) {
+        setError('PaputAuth todavía no está configurado en esta versión.')
+      }
+      await reload()
+      onChanged()
+    } catch (caught) {
+      const detail = cleanError(caught)
+      setError(
+        /sesión de Microsoft (?:caducó|ya no es válida|necesita reconectarse)/i.test(detail)
+          ? 'La sesión necesita reconectarse. Tu cuenta y sus datos siguen guardados; pulsa el botón de Microsoft.'
+          : detail,
+      )
+      // Actualiza cualquier token renovado sin retirar el perfil persistente.
+      await reload().catch(() => undefined)
+      onChanged()
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const needsMicrosoftReconnect = error?.includes('necesita reconectarse') === true
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -120,6 +151,19 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
                   Usar
                 </button>
               )}
+              {a.active && a.accessStatus !== 'approved' && a.accessStatus !== 'revoked' && (
+                <button
+                  onClick={requestAccess}
+                  disabled={busy !== null}
+                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-2.5 py-1.5 text-[11px] font-medium text-tenso-muted hover:text-tenso-text disabled:opacity-50"
+                >
+                  {busy === 'access'
+                    ? 'Consultando…'
+                    : a.accessStatus === 'pending'
+                      ? 'Actualizar'
+                      : 'Solicitar'}
+                </button>
+              )}
               <button
                 onClick={() => remove(a.uuid)}
                 className="rounded-lg px-2 py-1.5 text-xs text-tenso-muted hover:text-tenso-accent-soft"
@@ -137,11 +181,15 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
           disabled={busy !== null}
           className="w-full rounded-lg bg-tenso-accent py-2.5 font-bold text-[#17120a] transition-colors hover:bg-tenso-accent-soft active:translate-y-px disabled:opacity-60"
         >
-          {busy === 'microsoft' ? 'Procesando…' : 'Añadir cuenta de Microsoft'}
+          {busy === 'microsoft'
+            ? 'Procesando…'
+            : needsMicrosoftReconnect
+              ? 'Reconectar cuenta de Microsoft'
+              : 'Añadir cuenta de Microsoft'}
         </button>
 
         <div className="mt-4 border-t border-tenso-border pt-3">
-          <p className="mb-2 text-xs text-tenso-muted">Añadir identidad offline provisional</p>
+          <p className="mb-2 text-xs text-tenso-muted">Añadir cuenta no premium</p>
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -173,8 +221,8 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
             </button>
           </form>
           <p className="mt-2 text-[11px] leading-4 text-tenso-muted">
-            3–16 caracteres: letras, números y _. La aprobación real se activará al conectar
-            PaputAuth; crearla aquí todavía no reserva el nombre en el servidor.
+            3–16 caracteres: letras, números y _. Crear la cuenta envía una solicitud; el nombre
+            queda reservado únicamente después de que Renso la apruebe.
           </p>
         </div>
 
@@ -184,4 +232,11 @@ export function AccountMenu({ onClose, onChanged }: AccountMenuProps) {
       </div>
     </div>
   )
+}
+
+function cleanError(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error)
+  return text
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^Error:\s*/i, '')
 }

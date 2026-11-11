@@ -47,6 +47,37 @@
   color: var(--color-tenso-text);
 }
 
+/*
+  Fondo predeterminado propio. No usa imágenes ni vídeo: combina una luz ámbar
+  contenida, bandas de profundidad y siluetas de bloques. Es estable entre
+  temas, no consume decodificación en segundo plano y pesa cero en el bundle.
+*/
+.paput-backdrop {
+  isolation: isolate;
+  background-color: #0e1012;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.018) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(255, 255, 255, 0.012) 25%, transparent 25%);
+  background-position: 0 0, 18px 18px;
+  background-size: 36px 36px;
+}
+.paput-backdrop-glow {
+  z-index: -2;
+  background:
+    radial-gradient(circle at 78% 36%, rgba(201, 139, 56, 0.2), transparent 0 22%, transparent 48%),
+    radial-gradient(circle at 65% 72%, rgba(237, 189, 112, 0.07), transparent 0 18%, transparent 42%),
+    linear-gradient(118deg, #0d0f11 12%, #15191c 58%, #101214 100%);
+}
+.paput-backdrop-blocks {
+  z-index: -1;
+  opacity: 0.48;
+  background-image:
+    linear-gradient(to top, rgba(8, 9, 10, 0.95) 0 13%, transparent 13%),
+    linear-gradient(to top, transparent 0 58%, rgba(255, 255, 255, 0.025) 58% 59%, transparent 59%),
+    repeating-linear-gradient(90deg, transparent 0 71px, rgba(255, 255, 255, 0.018) 71px 72px);
+  clip-path: polygon(0 72%, 8% 72%, 8% 65%, 16% 65%, 16% 78%, 26% 78%, 26% 60%, 36% 60%, 36% 70%, 48% 70%, 48% 54%, 57% 54%, 57% 76%, 69% 76%, 69% 63%, 78% 63%, 78% 46%, 86% 46%, 86% 67%, 94% 67%, 94% 57%, 100% 57%, 100% 100%, 0 100%);
+}
+
 html,
 body,
 #root {
@@ -63,6 +94,15 @@ body,
   outline: 2px solid var(--color-tenso-accent);
   outline-offset: 2px;
   border-radius: 0.5rem;
+}
+
+/* Login offline: el foco pertenece al control compuesto (@ + input + contador),
+   no al input interior. El contenedor ya lo representa con focus-within. */
+input.login-name-input:focus,
+input.login-name-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -121,12 +161,28 @@ textarea {
   --color-tenso-panel: #1b1f22;
   --color-tenso-panel-2: #24292d;
   --color-tenso-border: #373d42;
+  --color-tenso-accent: #c98b38;
+  --color-tenso-accent-soft: #edbd70;
+  --color-tenso-text: #f2f0e9;
   --color-tenso-muted: #969da3;
+  color: var(--color-tenso-text);
+  color-scheme: dark;
   background-color: var(--color-tenso-bg);
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 22px 22px, 22px 22px;
+}
+
+/* Los controles nativos pueden conservar texto oscuro si el Client está en
+   tema claro. Studio es una superficie oscura y fija su propio contraste. */
+.dev-surface :where(input, select, textarea) {
+  color: var(--color-tenso-text);
+  caret-color: var(--color-tenso-accent-soft);
+}
+.dev-surface :where(input, textarea)::placeholder {
+  color: var(--color-tenso-muted);
+  opacity: 0.72;
 }
 
 /*

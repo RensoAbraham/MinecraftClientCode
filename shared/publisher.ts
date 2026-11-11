@@ -21,6 +21,8 @@ export interface ManifestFile {
   path: string
   size: number
   sha1: string
+  /** Identidad del objeto local compartido; EML-Lib ignora este campo extra. */
+  sha512: string
   url: string
   type: EmlFileType
 }
@@ -32,8 +34,12 @@ export interface PublishResult {
   hiddenCount: number
 }
 
-function sha1(file: string): string {
-  return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex')
+function hashes(file: string): { sha1: string; sha512: string } {
+  const data = fs.readFileSync(file)
+  return {
+    sha1: crypto.createHash('sha1').update(data).digest('hex'),
+    sha512: crypto.createHash('sha512').update(data).digest('hex'),
+  }
 }
 
 function typeFor(relPosix: string): EmlFileType {
@@ -150,11 +156,13 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
     const files: ManifestFile[] = walk(instDir, instDir).map((rel) => {
       const abs = path.join(instDir, rel)
       const relDir = path.posix.dirname(rel)
+      const digest = hashes(abs)
       return {
         name: path.posix.basename(rel),
         path: relDir === '.' ? '' : `${relDir}/`,
         size: fs.statSync(abs).size,
-        sha1: sha1(abs),
+        sha1: digest.sha1,
+        sha512: digest.sha512,
         url: externalSources.get(rel) ?? `${base}/${groupId}/${instanceId}/files/${rel}`,
         type: typeFor(rel),
       }
@@ -175,8 +183,6 @@ export function publishGroup(root: string, groupId: string, baseUrl: string): Pu
       loader: meta.loader,
       loaderVersion: meta.loaderVersion,
       serverAddress: meta.serverAddress,
-      tailscaleAddress: meta.tailscaleAddress ?? '',
-      tailscaleAuthKey: meta.tailscaleAuthKey ?? '',
       version: meta.version ?? '0.0.1',
       description: meta.description,
       imageUrl: iconFile ? iconFile.url : meta.imageUrl,

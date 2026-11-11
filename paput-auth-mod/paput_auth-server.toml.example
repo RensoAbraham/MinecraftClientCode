@@ -1,0 +1,7 @@
+[auth]
+# Debe ser igual para High y Low si ambas variantes entran al mismo servidor.
+audience = "paput:castle-town"
+
+# Copiar desde GET /v1/session-key. Es pública; la clave privada nunca va aquí.
+sessionPublicKey = "PEGA_AQUI_LA_CLAVE_PUBLICA_SPKI_BASE64URL"
+sessionKeyId = "paput-1"

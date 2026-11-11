@@ -1,7 +1,7 @@
 import { app, safeStorage, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { generateKeyPairSync, randomUUID } from 'node:crypto'
+import { createPrivateKey, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import type { Account as EmlAccount } from 'eml-lib'
 import type {
   Account as UiAccount,
@@ -34,8 +34,14 @@ interface StoredDevice extends DeviceIdentity {
   privateKey: string
 }
 
+export interface AccessRecord {
+  status: PaputAccessStatus
+  updatedAt: string
+  enrollmentId?: string
+}
+
 interface AccessStore {
-  accounts: Record<string, { status: PaputAccessStatus; updatedAt: string }>
+  accounts: Record<string, AccessRecord>
 }
 
 function storePath(): string {
@@ -86,6 +92,25 @@ function ensureAccessRecord(uuid: string): PaputAccessStatus {
   store.accounts[uuid] = { status: 'not-enrolled', updatedAt: new Date().toISOString() }
   saveAccessStore(store)
   return 'not-enrolled'
+}
+
+export function getAccessRecord(uuid: string): AccessRecord {
+  ensureAccessRecord(uuid)
+  return loadAccessStore().accounts[uuid]
+}
+
+export function setAccessRecord(
+  uuid: string,
+  status: PaputAccessStatus,
+  enrollmentId?: string,
+): void {
+  const store = loadAccessStore()
+  store.accounts[uuid] = {
+    status,
+    updatedAt: new Date().toISOString(),
+    enrollmentId: enrollmentId ?? store.accounts[uuid]?.enrollmentId,
+  }
+  saveAccessStore(store)
 }
 
 function loadStore(): Store {
@@ -201,8 +226,10 @@ export async function getActiveAccount(mainWindow: BrowserWindow | null): Promis
     upsertActive(refreshed)
     return toUiAccount(refreshed)
   } catch {
-    removeAccount(active.uuid)
-    return getActiveAccount(mainWindow)
+    // Conserva el perfil aunque Microsoft haya revocado o caducado las
+    // credenciales. El usuario puede reconectarlo y upsertActive reemplazará
+    // los tokens sin perder la cuenta, selección ni acceso Paput asociado.
+    return toUiAccount(active)
   }
 }
 
@@ -265,4 +292,20 @@ export function getDeviceIdentity(): DeviceIdentity {
     const { privateKey: _privateKey, ...publicIdentity } = stored
     return publicIdentity
   }
+}
+
+/** Firma un desafío del backend sin exponer la clave privada fuera del main. */
+export function signDeviceMessage(message: string): string {
+  if (typeof message !== 'string' || message.length === 0 || message.length > 4096) {
+    throw new Error('El desafío del servidor no es válido.')
+  }
+  // Garantiza que exista el archivo antes de leer el material privado.
+  getDeviceIdentity()
+  const stored = JSON.parse(decrypt(fs.readFileSync(devicePath()))) as StoredDevice
+  const key = createPrivateKey({
+    key: Buffer.from(stored.privateKey, 'base64url'),
+    format: 'der',
+    type: 'pkcs8',
+  })
+  return sign(null, Buffer.from(message, 'utf8'), key).toString('base64url')
 }

@@ -1,10 +1,15 @@
 import { execFile } from 'node:child_process'
-import { clipboard, shell } from 'electron'
+import { promisify } from 'node:util'
+import { app, clipboard, shell } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Account as EmlAccount } from 'eml-lib'
 import type { Instance, Progress } from '../../shared/ipc'
+import { safePackPath } from '../../shared/modrinth'
+import { startAuthBridge } from './auth-bridge'
+import { linkStoredObject, optimizeInstanceStorage } from './content-store'
+import { createGameSession, isConfigured as isPaputAuthConfigured } from './paput-api'
 
 /** Convierte bytes a un texto corto en MB. */
 function mb(bytes: number): string {
@@ -25,6 +30,37 @@ function appDataFolder(): string {
 /** Carpeta raíz del juego (root 'tensoclient' -> .tensoclient). Contiene una subcarpeta por instancia. */
 const GAME_ROOT = path.join(appDataFolder(), '.tensoclient')
 
+// Respaldo para equipos donde Node no resuelve Mojang aunque Windows sí tenga
+// Internet. EML-Lib usa fetch directamente; curl.exe viene incluido en Windows.
+let nativeFetchPatched = false
+function enableWindowsFetchFallback(): void {
+  if (nativeFetchPatched || process.platform !== 'win32') return
+  nativeFetchPatched = true
+  const originalFetch = globalThis.fetch
+  const runCurl = promisify(execFile)
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      return await originalFetch(input, init)
+    } catch (error) {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (!url.startsWith('http://') && !url.startsWith('https://')) throw error
+      try {
+        const method = (init?.method || 'GET').toUpperCase()
+        const args = ['-L', '--fail', '--silent', '--show-error', '--max-time', '45']
+        if (method === 'HEAD') args.push('-I')
+        args.push(url)
+        const result = await runCurl('curl.exe', args, {
+          maxBuffer: 256 * 1024 * 1024,
+          encoding: 'buffer',
+        })
+        return new Response(new Uint8Array(result.stdout as Buffer), { status: 200 })
+      } catch {
+        throw error
+      }
+    }
+  }) as typeof fetch
+}
+
 /** Sanitiza el id de instancia igual que EML-Lib (para que coincida la carpeta del slug). */
 function slugFor(instanceId: string): string {
   return instanceId.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -35,8 +71,64 @@ function slugFor(instanceId: string): string {
  * aquí viven solo `mods`, `config` y `saves`; los assets/librerías/versions/Java
  * se comparten en la raíz `.tensoclient/`.
  */
-function instanceDir(instanceId: string): string {
+export function instanceDir(instanceId: string): string {
   return path.join(GAME_ROOT, slugFor(instanceId))
+}
+
+/** El mismo almacén que usa Studio; vive junto a los datos del launcher. */
+function contentStoreRoot(): string {
+  return path.join(app.getPath('userData'), 'content', 'objects')
+}
+
+interface StoredManifestFile {
+  name?: unknown
+  path?: unknown
+  size?: unknown
+  sha512?: unknown
+  type?: unknown
+}
+
+/**
+ * Antes de que EML calcule la descarga, enlaza los mods que ya existen por
+ * contenido. Los manifiestos antiguos no tienen SHA-512 y se omiten sin error.
+ */
+async function prepareStoredMods(instance: Instance): Promise<number> {
+  if (!instance.modpackUrl) return 0
+  let response: Response
+  try {
+    response = await fetch(instance.modpackUrl, { cache: 'no-store', signal: AbortSignal.timeout(12_000) })
+  } catch {
+    throw new Error('No se pudo conectar con el servidor del modpack. Comprueba Internet e inténtalo nuevamente.')
+  }
+  if (response.status === 404) {
+    throw new Error(`El contenido de “${instance.name}” ya no está publicado. Abre Paput Studio y pulsa “Publicar cambios”.`)
+  }
+  if (!response.ok) {
+    throw new Error(`El servidor del modpack no está disponible (HTTP ${response.status}). Inténtalo más tarde.`)
+  }
+  let manifest: { files?: StoredManifestFile[] }
+  try {
+    manifest = (await response.json()) as { files?: StoredManifestFile[] }
+  } catch {
+    throw new Error(`El manifiesto publicado de “${instance.name}” no es válido. Vuelve a publicarlo desde Paput Studio.`)
+  }
+  let reused = 0
+  for (const file of manifest.files ?? []) {
+    if (
+      file.type !== 'MOD' ||
+      typeof file.name !== 'string' ||
+      typeof file.path !== 'string' ||
+      typeof file.sha512 !== 'string'
+    ) {
+      continue
+    }
+    const relative = safePackPath(`${file.path}${file.name}`)
+    if (!relative.startsWith('mods/')) continue
+    const destination = path.join(instanceDir(instance.id), ...relative.split('/'))
+    const expectedSize = typeof file.size === 'number' ? file.size : undefined
+    if (linkStoredObject(file.sha512, destination, contentStoreRoot(), expectedSize)) reused++
+  }
+  return reused
 }
 
 /** Carpetas pesadas que en el modo COMPARTIDO viven una sola vez en la raíz. */
@@ -497,6 +589,7 @@ export async function launchGame({
   onCancelled,
   onCrashed,
 }: LaunchOptions): Promise<void> {
+  enableWindowsFetchFallback()
   const { Launcher } = await import('eml-lib')
 
   // Momento del lanzamiento, para detectar crash-reports nuevos al cerrarse.
@@ -508,20 +601,49 @@ export async function launchGame({
   // Primera vez: aplica el options.txt del modpack como punto de partida.
   await ensureFirstRunOptions(instance)
 
+  const reusedMods = await prepareStoredMods(instance)
+  if (reusedMods > 0) {
+    onProgress({
+      stage: 'preparing',
+      fraction: -1,
+      label: `Reutilizando ${reusedMods} mod${reusedMods === 1 ? '' : 's'} local${reusedMods === 1 ? '' : 'es'}…`,
+    })
+  }
+
   // Auto-join: si está activado y la instancia define un servidor, arrancamos
   // con Quick Play (--quickPlayMultiplayer) para entrar directo. Si está
-  // desactivado, el juego abre en el menú y el jugador conecta a mano (útil si
-  // usa otra ruta, p. ej. Tailscale).
+  // desactivado, el juego abre en el menú y el jugador conecta a mano.
   const gameArgs =
     autoJoin && instance.serverAddress
       ? ['--quickPlayMultiplayer', instance.serverAddress]
       : []
 
+  // El mod solicita su token cuando realmente va a conectar. La clave privada
+  // permanece en Electron; Minecraft solo recibe un puerto y secreto efímeros.
+  // La audiencia representa al servidor/grupo, no a la variante High o Low:
+  // ambas deben poder entrar al mismo servidor sin compartir tokens con otro grupo.
+  const audience = `paput:${slugFor(instance.groupId ?? 'paput')}`
+  const authBridge = isPaputAuthConfigured()
+    ? await startAuthBridge(audience, createGameSession)
+    : null
+  const paputJvmArgs = [
+    ...(instance.serverAddress ? [`-Dpaput.serverAddress=${instance.serverAddress}`] : []),
+    ...(authBridge
+      ? [
+        `-Dpaput.bridgePort=${authBridge.port}`,
+        `-Dpaput.bridgeSecret=${authBridge.secret}`,
+        `-Dpaput.audience=${audience}`,
+        ]
+      : []),
+  ]
+
   // Antes de lanzar: migra esta instancia al layout COMPARTIDO (borra sus copias
   // duplicadas de assets/librerías/Java, que ahora viven una sola vez en la raíz).
   migrateSharedLayout(instance.id)
 
-  const launcher = new Launcher({
+  let launcher: InstanceType<typeof Launcher>
+  try {
+    launcher = new Launcher({
     root: 'tensoclient', // -> .tensoclient (oculto) en Windows
     storage: 'shared',
     // Modo COMPARTIDO: assets, librerías, versions y el Java (runtime) se guardan
@@ -549,10 +671,14 @@ export async function launchGame({
     // Descarga el JRE correcto automáticamente y arranca con el afinado de GC
     // escalado según la RAM (Aikar completo con RAM holgada; perfil ligero para
     // heaps ajustados como LOW, ver jvmFlags) para que el pack pesado arranque.
-    java: { install: 'auto', args: jvmFlags(maxRamMb) },
+    java: { install: 'auto', args: [...jvmFlags(maxRamMb), ...paputJvmArgs] },
     memory: { min: 1024, max: maxRamMb },
     window: { width: 1280, height: 720 },
-  })
+    })
+  } catch (error) {
+    await authBridge?.close()
+    throw error
+  }
 
   // --- Mapeo de eventos de EML-Lib a nuestro Progress -----------------------
   //
@@ -633,7 +759,15 @@ export async function launchGame({
 
   try {
     await launcher.launch()
+    // Al cerrar el juego, incorpora los mods recién descargados. La siguiente
+    // variante o reparación podrá enlazarlos sin ocupar otra copia física.
+    try {
+      await optimizeInstanceStorage(instanceDir(instance.id), contentStoreRoot())
+    } catch {
+      /* La deduplicación es opcional y nunca debe convertir un cierre en error. */
+    }
   } finally {
+    await authBridge?.close()
     const wasCancelled = active?.cancelled ?? false
     active = null
     // Si se canceló, la descarga de eml-lib pudo dejar archivos a medias:

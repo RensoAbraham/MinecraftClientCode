@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node ../scripts/test-auth-worker.mjs",
+    "generate:secrets": "node scripts/generate-secrets.mjs"
+  }
+}

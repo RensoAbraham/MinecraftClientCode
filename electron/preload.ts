@@ -4,7 +4,7 @@ import { IPC, type TensoApi, type Progress } from '../shared/ipc'
 // Expone una API mínima y tipada en window.tenso.
 // El renderer NUNCA accede a ipcRenderer directamente.
 const api: TensoApi = {
-  redeemCode: (code) => ipcRenderer.invoke(IPC.redeemCode, code),
+  installDefaultGroup: () => ipcRenderer.invoke(IPC.installDefaultGroup),
   getInstances: () => ipcRenderer.invoke(IPC.getInstances),
   removeGroup: (groupId) => ipcRenderer.invoke(IPC.removeGroup, groupId),
   removeInstance: (groupId) => ipcRenderer.invoke(IPC.removeInstance, groupId),
@@ -21,6 +21,8 @@ const api: TensoApi = {
   removeAccount: (uuid) => ipcRenderer.invoke(IPC.removeAccount, uuid),
   logout: () => ipcRenderer.invoke(IPC.logout),
   getDeviceIdentity: () => ipcRenderer.invoke(IPC.getDeviceIdentity),
+  requestPaputAccess: () => ipcRenderer.invoke(IPC.requestPaputAccess),
+  refreshPaputAccess: () => ipcRenderer.invoke(IPC.refreshPaputAccess),
   getActiveSkin: () => ipcRenderer.invoke(IPC.getActiveSkin),
   listSavedSkins: () => ipcRenderer.invoke(IPC.listSavedSkins),
   addSavedSkin: () => ipcRenderer.invoke(IPC.addSavedSkin),
@@ -29,9 +31,10 @@ const api: TensoApi = {
   getCapes: () => ipcRenderer.invoke(IPC.getCapes),
   applyCape: (id) => ipcRenderer.invoke(IPC.applyCape, id),
   hideCape: () => ipcRenderer.invoke(IPC.hideCape),
-  play: (instanceId, connection) => ipcRenderer.invoke(IPC.play, instanceId, connection),
-  tailscaleStatus: () => ipcRenderer.invoke(IPC.tailscaleStatus),
-  tailscaleConnect: (authKey) => ipcRenderer.invoke(IPC.tailscaleConnect, authKey),
+  play: (instanceId) => ipcRenderer.invoke(IPC.play, instanceId),
+  checkInstanceMods: (instanceId) => ipcRenderer.invoke(IPC.checkInstanceMods, instanceId),
+  fixInstanceMods: (instanceId, strategy) =>
+    ipcRenderer.invoke(IPC.fixInstanceMods, instanceId, strategy),
   cancelPlay: () => ipcRenderer.invoke(IPC.cancelPlay),
   repairInstance: (instanceId) => ipcRenderer.invoke(IPC.repairInstance, instanceId),
   deepClean: (instanceId) => ipcRenderer.invoke(IPC.deepClean, instanceId),
@@ -65,6 +68,26 @@ const api: TensoApi = {
   devSetPublished: (groupId, instanceId, published) =>
     ipcRenderer.invoke(IPC.devSetPublished, groupId, instanceId, published),
   devPublish: () => ipcRenderer.invoke(IPC.devPublish),
+  devBeginDraft: () => ipcRenderer.invoke(IPC.devBeginDraft),
+  devCommitDraft: () => ipcRenderer.invoke(IPC.devCommitDraft),
+  devDiscardDraft: () => ipcRenderer.invoke(IPC.devDiscardDraft),
+  devOptimizeStorage: () => ipcRenderer.invoke(IPC.devOptimizeStorage),
+  devStorageStats: () => ipcRenderer.invoke(IPC.devStorageStats),
+  devCleanStorage: () => ipcRenderer.invoke(IPC.devCleanStorage),
+  paputAdminStatus: () => ipcRenderer.invoke(IPC.paputAdminStatus),
+  paputAdminConfigure: (token) => ipcRenderer.invoke(IPC.paputAdminConfigure, token),
+  paputAdminEnrollments: (status) => ipcRenderer.invoke(IPC.paputAdminEnrollments, status),
+  paputAdminReview: (id, decision) => ipcRenderer.invoke(IPC.paputAdminReview, id, decision),
+  paputAdminDevices: () => ipcRenderer.invoke(IPC.paputAdminDevices),
+  paputAdminRevokeDevice: (id) => ipcRenderer.invoke(IPC.paputAdminRevokeDevice, id),
+  paputAdminRestoreDevice: (id) => ipcRenderer.invoke(IPC.paputAdminRestoreDevice, id),
+  paputAdminRevokeAccount: (id) => ipcRenderer.invoke(IPC.paputAdminRevokeAccount, id),
+  paputAdminRestoreAccount: (id) => ipcRenderer.invoke(IPC.paputAdminRestoreAccount, id),
+  onDevStorageProgress: (cb: (p: { label: string; fraction: number }) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, p: { label: string; fraction: number }) => cb(p)
+    ipcRenderer.on(IPC.devStorageProgress, listener)
+    return () => ipcRenderer.off(IPC.devStorageProgress, listener)
+  },
   onDevPublishProgress: (cb: (p: { label: string; fraction: number }) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, p: { label: string; fraction: number }) => cb(p)
     ipcRenderer.on(IPC.devPublishProgress, listener)
@@ -75,6 +98,7 @@ const api: TensoApi = {
   r2Summary: () => ipcRenderer.invoke(IPC.r2Summary),
   r2DeletePrefix: (prefix) => ipcRenderer.invoke(IPC.r2DeletePrefix, prefix),
   devCreateGroup: (name) => ipcRenderer.invoke(IPC.devCreateGroup, name),
+  devRenameGroup: (groupId, name) => ipcRenderer.invoke(IPC.devRenameGroup, groupId, name),
   devCreateInstance: (groupId, meta) => ipcRenderer.invoke(IPC.devCreateInstance, groupId, meta),
   devUpdateInstance: (groupId, instanceId, patch) =>
     ipcRenderer.invoke(IPC.devUpdateInstance, groupId, instanceId, patch),
@@ -99,6 +123,10 @@ const api: TensoApi = {
     ipcRenderer.invoke(IPC.devAddContent, groupId, instanceId, kind),
   devImportContentPaths: (groupId, instanceId, kind, paths) =>
     ipcRenderer.invoke(IPC.devImportContentPaths, groupId, instanceId, kind, paths),
+  devSearchModrinthMods: (groupId, instanceId, query) =>
+    ipcRenderer.invoke(IPC.devSearchModrinthMods, groupId, instanceId, query),
+  devInstallModrinthMod: (groupId, instanceId, versionId) =>
+    ipcRenderer.invoke(IPC.devInstallModrinthMod, groupId, instanceId, versionId),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   devListMods: (groupId, instanceId) => ipcRenderer.invoke(IPC.devListMods, groupId, instanceId),
   devSetModEnabled: (groupId, instanceId, name, enabled) =>

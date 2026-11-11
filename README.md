@@ -20,7 +20,8 @@ local que solo se habilita en el equipo del dueño.
 - **skinview3d** (Three.js) — visor 3D de skins y capas.
 - **Cloudflare R2** (S3-compatible, vía `aws4fetch`) — hosting de los archivos del
   modpack para que los jugadores descarguen desde la nube.
-- **extract-zip** — importación de modpacks de Modrinth (`.mrpack`).
+- **yauzl** — lectura controlada de `.mrpack` y resource packs, rechazando
+  traversal, enlaces simbólicos y ZIPs desproporcionados.
 - **electron-updater** — actualizaciones automáticas vía GitHub Releases.
 - **electron-builder** — empaquetado del instalador (NSIS) para Windows.
 
@@ -44,8 +45,9 @@ local que solo se habilita en el equipo del dueño.
    verificadas de Modrinth; R2 recibe únicamente overrides, configuración, arte
    y archivos propios.
 2. El jugador elige primero su cuenta Microsoft o una identidad offline local.
-3. La referencia de contenido (`TENSO-...`) añade el grupo publicado; solo
-   contiene la ubicación del manifiesto y **no es una credencial de acceso**.
+3. El launcher conoce la ubicación del grupo oficial mediante su configuración
+   de compilación y descarga el manifiesto automáticamente; el jugador no pega
+   códigos ni elige servidores.
 4. El jugador pulsa JUGAR: el
    launcher descarga/actualiza el modpack desde ambas fuentes y entra al servidor.
 
@@ -53,9 +55,9 @@ La publicación mantiene cada prefijo de R2 como un espejo: elimina archivos
 antiguos que ya no aparecen en el manifiesto, evitando que versiones anteriores
 consuman almacenamiento indefinidamente.
 
-> El acceso offline actual es provisional y todavía no evita la suplantación de
-> nombres por sí solo. La base para vincular cuentas, dispositivos y el futuro
-> mod de servidor se describe en [AUTH_FOUNDATION.md](./AUTH_FOUNDATION.md).
+> Un nombre offline por sí solo no autoriza una conexión. El Worker, la identidad
+> Ed25519 de la instalación y el mod PaputAuth forman el control de acceso
+> descrito en [AUTH_FOUNDATION.md](./AUTH_FOUNDATION.md).
 
 ## Desarrollo
 

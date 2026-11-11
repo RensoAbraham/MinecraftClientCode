@@ -34,7 +34,7 @@ export function R2Settings({ onClose }: R2SettingsProps) {
     setTimeout(onClose, 700)
   }
 
-  const input = 'w-full rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm outline-none focus:border-tenso-accent'
+  const input = 'w-full rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-2 text-sm text-tenso-text placeholder:text-tenso-muted/70 outline-none focus:border-tenso-accent'
   const label = 'mb-1 block text-xs font-medium text-tenso-muted'
 
   return (
@@ -43,7 +43,7 @@ export function R2Settings({ onClose }: R2SettingsProps) {
         className="anim-fade-in-scale w-[460px] max-w-[92vw] rounded-2xl border border-tenso-border bg-tenso-panel p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-lg font-bold">Cloudflare R2</h2>
+        <h2 className="mb-1 text-lg font-bold text-tenso-text">Cloudflare R2</h2>
         <p className="mb-4 text-xs text-tenso-muted">
           Credenciales para subir tus modpacks. Se guardan cifradas solo en este equipo.
         </p>

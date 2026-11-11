@@ -10,9 +10,6 @@ export type LaunchStage =
   | 'running' // el juego está abierto
   | 'error'
 
-/** Método de conexión al servidor que elige el jugador. */
-export type ConnectionKind = 'playit' | 'tailscale'
-
 /** Progreso reportado por el motor de sincronización / descargas. */
 export interface Progress {
   stage: LaunchStage
@@ -33,11 +30,8 @@ export interface Instance {
   mcVersion: string // p. ej. "1.21.1"
   loader: 'neoforge' | 'forge' | 'fabric' | 'quilt' | 'vanilla'
   loaderVersion: string
-  serverAddress: string // dirección PLAYIT (ip:puerto) para quickPlay
-  /** Dirección por Tailscale (ip 100.x:puerto). Si existe, se ofrece como cartilla. */
-  tailscaleAddress?: string
-  /** Auth key de Tailscale (para el modo automático). Solo si el dev la configuró. */
-  tailscaleAuthKey?: string
+  /** Dirección directa del servidor (dominio o IP con puerto) para Quick Play. */
+  serverAddress: string
   /** Versión del contenido de la instancia (la pone el dev, p. ej. "0.0.6"). */
   version?: string
   imageUrl?: string
@@ -92,10 +86,6 @@ export interface DevInstance {
   loader: string
   loaderVersion: string
   serverAddress: string
-  /** Dirección por Tailscale (ip 100.x:puerto), opcional. */
-  tailscaleAddress: string
-  /** Auth key de Tailscale (modo automático), opcional. */
-  tailscaleAuthKey: string
   description: string
   /** Versión del contenido de la instancia (diferenciador, p. ej. "0.0.6"). */
   version: string
@@ -114,8 +104,6 @@ export interface InstancePatch {
   loader?: Instance['loader']
   loaderVersion?: string
   serverAddress?: string
-  tailscaleAddress?: string
-  tailscaleAuthKey?: string
   description?: string
   version?: string
 }
@@ -125,8 +113,6 @@ export interface DevGroup {
   id: string
   name: string
   instances: DevInstance[]
-  /** Código de grupo listo para compartir. */
-  code: string
 }
 
 /** Resumen del resultado de importar un .mrpack de Modrinth. */
@@ -155,6 +141,102 @@ export interface DevContentImportResult {
   cancelled: boolean
 }
 
+/** Versión de un mod de Modrinth ya filtrada para la instancia seleccionada. */
+export interface ModrinthModResult {
+  projectId: string
+  versionId: string
+  title: string
+  description: string
+  author: string
+  iconUrl?: string
+  downloads: number
+  versionNumber: string
+  fileName: string
+  fileSize: number
+}
+
+/** Resultado de instalar el mod elegido y sus dependencias obligatorias. */
+export interface ModrinthInstallResult {
+  installed: string[]
+  replaced: string[]
+}
+
+/** Resultado de compactar los mods de Studio en el almacén por contenido. */
+export interface StorageOptimizeResult {
+  scannedFiles: number
+  linkedFiles: number
+  uniqueFiles: number
+  logicalBytes: number
+  storedBytes: number
+  savedBytes: number
+  failedFiles: number
+}
+
+/** Uso real del almacén compartido, calculado a partir de hardlinks del sistema. */
+export interface ContentStoreStats {
+  objectCount: number
+  referencedObjects: number
+  reclaimableObjects: number
+  /** Suma de los objetos físicos, incluidos los huérfanos. */
+  physicalBytes: number
+  /** Suma de los mods visibles enlazados al almacén. */
+  logicalBytes: number
+  /** Copias físicas evitadas entre dos o más destinos. */
+  savedBytes: number
+  reclaimableBytes: number
+  hardlinkReferences: number
+}
+
+export interface ContentStoreCleanResult {
+  removedObjects: number
+  removedBytes: number
+  failedObjects: number
+  stats: ContentStoreStats
+}
+
+export type ModIntegrityIssueKind = 'missing' | 'modified' | 'unexpected'
+
+export interface ModIntegrityIssue {
+  path: string
+  kind: ModIntegrityIssueKind
+  bytes: number
+}
+
+export interface ModIntegrityReport {
+  status: 'clean' | 'issues' | 'unavailable'
+  expectedFiles: number
+  checkedFiles: number
+  issues: ModIntegrityIssue[]
+  error?: string
+}
+
+export interface PaputEnrollment {
+  id: string
+  provider: 'microsoft' | 'offline'
+  external_id: string
+  requested_name: string
+  device_id: string
+  proof_status?: 'verified' | 'manual'
+  status: 'pending' | 'approved' | 'denied'
+  created_at: string
+  expires_at: string
+  reviewed_at?: string | null
+}
+
+export interface PaputDevice {
+  id: string
+  status: 'approved' | 'revoked'
+  link_status: 'approved' | 'revoked'
+  account_status: 'approved' | 'revoked'
+  created_at: string
+  last_seen_at?: string | null
+  revoked_at?: string | null
+  account_id: string
+  canonical_name: string
+  provider: 'microsoft' | 'offline'
+  external_id: string
+}
+
 /** Datos para crear una instancia desde Paput Studio. */
 export interface NewInstance {
   name: string
@@ -162,10 +244,6 @@ export interface NewInstance {
   loader: Instance['loader']
   loaderVersion: string
   serverAddress: string
-  /** Dirección por Tailscale (ip 100.x:puerto), opcional. */
-  tailscaleAddress?: string
-  /** Auth key de Tailscale (modo automático), opcional. */
-  tailscaleAuthKey?: string
   /** Descripción / requisitos recomendados (opcional). */
   description?: string
   /** Versión del contenido (diferenciador, p. ej. "0.0.1"). */
@@ -232,11 +310,8 @@ export interface Account {
  * Cada método es un canal IPC tipado contra el main.
  */
 export interface TensoApi {
-  /**
-   * Canjea un código de GRUPO. Descarga las instancias publicadas del grupo,
-   * las guarda y las devuelve. Devuelve [] si el código no es válido.
-   */
-  redeemCode(code: string): Promise<Instance[]>
+  /** Descarga el grupo oficial configurado en el launcher, sin código manual. */
+  installDefaultGroup(): Promise<Instance[]>
   /** Devuelve todas las instancias desbloqueadas (de todos los grupos). */
   getInstances(): Promise<Instance[]>
   /** Elimina un grupo desbloqueado (y todas sus instancias). */
@@ -275,6 +350,10 @@ export interface TensoApi {
   logout(): Promise<void>
   /** Identidad pública y persistente de esta instalación del launcher. */
   getDeviceIdentity(): Promise<DeviceIdentity>
+  /** Solicita aprobación de la cuenta/dispositivo cuando PaputAuth está configurado. */
+  requestPaputAccess(): Promise<{ configured: boolean; account: Account | null }>
+  /** Consulta el estado remoto de la solicitud activa. */
+  refreshPaputAccess(): Promise<{ configured: boolean; account: Account | null }>
   /** Skin activa actual (data URI) para el visor 3D, o null. */
   getActiveSkin(): Promise<{ dataUrl: string; variant: 'classic' | 'slim' } | null>
   /** Lista las skins guardadas en la galería local. */
@@ -291,18 +370,12 @@ export interface TensoApi {
   applyCape(id: string): Promise<void>
   /** Oculta la capa de la cuenta. */
   hideCape(): Promise<void>
-  /**
-   * Sincroniza + lanza el juego (de la instancia indicada) conectando al
-   * servidor. `connection` elige qué dirección usar (PLAYIT o Tailscale).
-   */
-  play(instanceId: string, connection?: ConnectionKind): Promise<void>
-  /** Estado de Tailscale en este equipo (instalado / conectado). */
-  tailscaleStatus(): Promise<{ installed: boolean; connected: boolean }>
-  /**
-   * Conexión automática a Tailscale: instala Tailscale con winget si falta y
-   * ejecuta `tailscale up` con la auth key. Requiere confirmación (UAC).
-   */
-  tailscaleConnect(authKey: string): Promise<{ ok: boolean; message: string }>
+  /** Sincroniza y lanza la instancia; Quick Play usa su dirección de servidor. */
+  play(instanceId: string): Promise<void>
+  /** Comprueba mods faltantes, modificados y no permitidos antes de jugar. */
+  checkInstanceMods(instanceId: string): Promise<ModIntegrityReport>
+  /** Corrige incidencias selectivamente o reinstala únicamente los mods. */
+  fixInstanceMods(instanceId: string, strategy: 'repair' | 'reinstall'): Promise<{ removed: number }>
   /** Cancela la preparación/lanzamiento en curso y cierra el juego si está abierto. */
   cancelPlay(): Promise<void>
   /**
@@ -374,6 +447,28 @@ export interface TensoApi {
   devSetPublished(groupId: string, instanceId: string, published: boolean): Promise<void>
   /** Regenera los manifiestos (publicar) de todos los grupos. */
   devPublish(): Promise<void>
+  devBeginDraft(): Promise<void>
+  devCommitDraft(): Promise<void>
+  devDiscardDraft(): Promise<void>
+  /** Deduplica los mods locales de todas las instancias de Studio. */
+  devOptimizeStorage(): Promise<StorageOptimizeResult>
+  /** Mide el almacén compartido usando el contador real de hardlinks. */
+  devStorageStats(): Promise<ContentStoreStats>
+  /** Elimina únicamente objetos que ya no tienen enlaces de uso. */
+  devCleanStorage(): Promise<ContentStoreCleanResult>
+  /** Estado de la conexión administrativa con PaputAuth, sin devolver el token. */
+  paputAdminStatus(): Promise<{ apiUrl: string; configured: boolean }>
+  /** Guarda el token administrativo cifrado en este equipo. */
+  paputAdminConfigure(token: string): Promise<void>
+  paputAdminEnrollments(status?: 'pending' | 'approved' | 'denied'): Promise<PaputEnrollment[]>
+  paputAdminReview(id: string, decision: 'approve' | 'deny'): Promise<void>
+  paputAdminDevices(): Promise<PaputDevice[]>
+  paputAdminRevokeDevice(id: string): Promise<void>
+  paputAdminRestoreDevice(id: string): Promise<void>
+  paputAdminRevokeAccount(id: string): Promise<void>
+  paputAdminRestoreAccount(id: string): Promise<void>
+  /** Suscribe al progreso de la optimización local. */
+  onDevStorageProgress(cb: (p: { label: string; fraction: number }) => void): () => void
   /** Suscribe al progreso de la publicación/subida a R2. Devuelve desuscripción. */
   onDevPublishProgress(cb: (p: { label: string; fraction: number }) => void): () => void
   /** Prueba la conexión con R2 (escritura real). */
@@ -386,6 +481,8 @@ export interface TensoApi {
   r2DeletePrefix(prefix: string): Promise<{ deleted: number }>
   /** Crea un grupo nuevo. Devuelve su id. */
   devCreateGroup(name: string): Promise<string>
+  /** Cambia el nombre visible del grupo sin cambiar su id de publicación. */
+  devRenameGroup(groupId: string, name: string): Promise<void>
   /** Crea una instancia nueva en un grupo. Devuelve su id. */
   devCreateInstance(groupId: string, meta: NewInstance): Promise<string>
   /** Edita los datos de una instancia (nombre, versión, servidor, descripción…). */
@@ -422,6 +519,18 @@ export interface TensoApi {
     kind: DevContentKind,
     paths: string[],
   ): Promise<DevContentImportResult>
+  /** Busca mods con una versión compatible con la instancia. */
+  devSearchModrinthMods(
+    groupId: string,
+    instanceId: string,
+    query: string,
+  ): Promise<ModrinthModResult[]>
+  /** Instala una versión concreta y sus dependencias requeridas verificando hashes. */
+  devInstallModrinthMod(
+    groupId: string,
+    instanceId: string,
+    versionId: string,
+  ): Promise<ModrinthInstallResult>
   /** Obtiene la ruta local de un File soltado; no lee ni copia el archivo. */
   getPathForFile(file: File): string
   /** Lista los mods de una instancia con su estado (activado/desactivado) y peso (bytes). */
@@ -444,7 +553,7 @@ export interface TensoApi {
 
 /** Nombres de canales IPC (invoke). Centralizados para evitar typos. */
 export const IPC = {
-  redeemCode: 'tenso:redeemCode',
+  installDefaultGroup: 'tenso:installDefaultGroup',
   getInstances: 'tenso:getInstances',
   removeGroup: 'tenso:removeGroup',
   removeInstance: 'tenso:removeInstance',
@@ -459,6 +568,8 @@ export const IPC = {
   removeAccount: 'tenso:removeAccount',
   logout: 'tenso:logout',
   getDeviceIdentity: 'tenso:getDeviceIdentity',
+  requestPaputAccess: 'tenso:requestPaputAccess',
+  refreshPaputAccess: 'tenso:refreshPaputAccess',
   getActiveSkin: 'tenso:getActiveSkin',
   listSavedSkins: 'tenso:listSavedSkins',
   addSavedSkin: 'tenso:addSavedSkin',
@@ -468,9 +579,9 @@ export const IPC = {
   applyCape: 'tenso:applyCape',
   hideCape: 'tenso:hideCape',
   play: 'tenso:play',
+  checkInstanceMods: 'tenso:checkInstanceMods',
+  fixInstanceMods: 'tenso:fixInstanceMods',
   cancelPlay: 'tenso:cancelPlay',
-  tailscaleStatus: 'tenso:tailscaleStatus',
-  tailscaleConnect: 'tenso:tailscaleConnect',
   repairInstance: 'tenso:repairInstance',
   deepClean: 'tenso:deepClean',
   uploadLog: 'tenso:uploadLog',
@@ -493,12 +604,29 @@ export const IPC = {
   devListGroups: 'tenso:devListGroups',
   devSetPublished: 'tenso:devSetPublished',
   devPublish: 'tenso:devPublish',
+  devBeginDraft: 'tenso:devBeginDraft',
+  devCommitDraft: 'tenso:devCommitDraft',
+  devDiscardDraft: 'tenso:devDiscardDraft',
   devPublishProgress: 'tenso:devPublishProgress', // canal de eventos (send)
+  devOptimizeStorage: 'tenso:devOptimizeStorage',
+  devStorageStats: 'tenso:devStorageStats',
+  devCleanStorage: 'tenso:devCleanStorage',
+  paputAdminStatus: 'tenso:paputAdminStatus',
+  paputAdminConfigure: 'tenso:paputAdminConfigure',
+  paputAdminEnrollments: 'tenso:paputAdminEnrollments',
+  paputAdminReview: 'tenso:paputAdminReview',
+  paputAdminDevices: 'tenso:paputAdminDevices',
+  paputAdminRevokeDevice: 'tenso:paputAdminRevokeDevice',
+  paputAdminRestoreDevice: 'tenso:paputAdminRestoreDevice',
+  paputAdminRevokeAccount: 'tenso:paputAdminRevokeAccount',
+  paputAdminRestoreAccount: 'tenso:paputAdminRestoreAccount',
+  devStorageProgress: 'tenso:devStorageProgress', // canal de eventos (send)
   r2Test: 'tenso:r2Test',
   r2Clear: 'tenso:r2Clear',
   r2Summary: 'tenso:r2Summary',
   r2DeletePrefix: 'tenso:r2DeletePrefix',
   devCreateGroup: 'tenso:devCreateGroup',
+  devRenameGroup: 'tenso:devRenameGroup',
   devCreateInstance: 'tenso:devCreateInstance',
   devUpdateInstance: 'tenso:devUpdateInstance',
   devSetInstanceImage: 'tenso:devSetInstanceImage',
@@ -511,6 +639,8 @@ export const IPC = {
   devOpenFolder: 'tenso:devOpenFolder',
   devAddContent: 'tenso:devAddContent',
   devImportContentPaths: 'tenso:devImportContentPaths',
+  devSearchModrinthMods: 'tenso:devSearchModrinthMods',
+  devInstallModrinthMod: 'tenso:devInstallModrinthMod',
   devListMods: 'tenso:devListMods',
   devSetModEnabled: 'tenso:devSetModEnabled',
   devPullGameConfig: 'tenso:devPullGameConfig',

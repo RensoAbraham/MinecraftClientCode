@@ -140,6 +140,17 @@ function makeClient(c: R2Config) {
   })
 }
 
+/** Decodifica el texto escapado que devuelve ListObjectsV2 dentro de <Key>. */
+function decodeXmlText(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&', apos: "'", quot: '"', lt: '<', gt: '>',
+  }
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replace(/&(amp|apos|quot|lt|gt);/g, (_, entity: string) => named[entity])
+}
+
 /** Lista todas las claves del bucket (con un prefijo opcional), paginando. */
 async function listKeys(prefix = ''): Promise<string[]> {
   const c = getConfig()
@@ -168,7 +179,7 @@ async function listKeys(prefix = ''): Promise<string[]> {
       throw new Error(`No se pudo listar el bucket: HTTP ${res.status} ${body}`)
     }
     const xml = await res.text()
-    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) keys.push(m[1].replace(/&amp;/g, '&'))
+    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) keys.push(decodeXmlText(m[1]))
     const next = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)
     token = next ? next[1] : undefined
   } while (token)
@@ -198,7 +209,7 @@ async function listObjectsWithEtag(prefix = ''): Promise<Map<string, string>> {
       const etag = seg.match(/<ETag>([^<]+)<\/ETag>/)?.[1]
       if (key && etag) {
         out.set(
-          key.replace(/&amp;/g, '&'),
+          decodeXmlText(key),
           etag.replace(/&quot;/g, '').replace(/"/g, '').toLowerCase(),
         )
       }
@@ -216,14 +227,21 @@ async function deleteKeys(keys: string[], onProgress?: DeleteProgress): Promise<
   const client = makeClient(c)
   const base = s3Base(c)
   let deleted = 0
+  let processed = 0
+  const failures: string[] = []
   for (const key of keys) {
-    onProgress?.(deleted, keys.length, key)
+    onProgress?.(processed, keys.length, key)
     const r = await client.fetch(`${base}/${c.bucket}/${key.split('/').map(encodeURIComponent).join('/')}`, {
       method: 'DELETE',
     })
+    processed++
     if (r.ok || r.status === 204) deleted++
+    else failures.push(`${key} (HTTP ${r.status}: ${(await r.text()).slice(0, 160)})`)
   }
-  onProgress?.(deleted, keys.length, 'completado')
+  if (failures.length) {
+    throw new Error(`R2 rechazó ${failures.length} eliminación(es): ${failures.slice(0, 3).join(', ')}`)
+  }
+  onProgress?.(processed, keys.length, 'verificando…')
   return deleted
 }
 
@@ -241,14 +259,27 @@ export async function summarize(): Promise<{ groups: { prefix: string; count: nu
 
 /** Borra solo los objetos de un grupo (prefijo). */
 export async function deletePrefix(prefix: string, onProgress?: DeleteProgress): Promise<{ deleted: number }> {
-  const keys = await listKeys(prefix.endsWith('/') ? prefix : `${prefix}/`)
-  return { deleted: await deleteKeys(keys, onProgress) }
+  const normalized = prefix.endsWith('/') ? prefix : `${prefix}/`
+  const keys = await listKeys(normalized)
+  const deleted = await deleteKeys(keys, onProgress)
+  const remaining = await listKeys(normalized)
+  if (remaining.length) throw new Error(`R2 todavía conserva ${remaining.length} objeto(s) de ${prefix}.`)
+  onProgress?.(keys.length, keys.length, 'completado')
+  return { deleted }
 }
 
 /** Vacía por completo el bucket (borra TODOS los objetos). */
 export async function clearBucket(onProgress?: DeleteProgress): Promise<{ deleted: number }> {
   const keys = await listKeys()
-  return { deleted: await deleteKeys(keys, onProgress) }
+  let deleted = await deleteKeys(keys, onProgress)
+  // Una segunda pasada cubre objetos creados durante el borrado o un listado
+  // momentáneamente desactualizado. Nunca afirmamos “vacío” sin comprobarlo.
+  const remaining = await listKeys()
+  if (remaining.length) deleted += await deleteKeys(remaining, onProgress)
+  const finalKeys = await listKeys()
+  if (finalKeys.length) throw new Error(`R2 todavía conserva ${finalKeys.length} objeto(s). Intenta de nuevo o revisa los permisos de borrado del token.`)
+  onProgress?.(keys.length, keys.length, 'completado')
+  return { deleted }
 }
 
 /** Sube un grupo completo (group.json + instancias publicadas + sus archivos). */

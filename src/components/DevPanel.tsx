@@ -1,8 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { DevGroup, DevInstance, InstancePatch, NewInstance, R2ConfigView } from '../../shared/ipc'
+import type {
+  ContentStoreStats,
+  DevGroup,
+  DevInstance,
+  InstancePatch,
+  MrImportSummary,
+  NewInstance,
+  R2ConfigView,
+} from '../../shared/ipc'
 import { R2Settings } from './R2Settings'
 import { R2Manager } from './R2Manager'
 import { ResourceManager } from './ResourceManager'
+import { PaputAccessManager } from './PaputAccessManager'
 
 interface DevPanelProps {
   onClose: () => void
@@ -16,37 +25,49 @@ const EMPTY_FORM: NewInstance = {
   loader: 'neoforge',
   loaderVersion: '21.1.234',
   serverAddress: '',
-  tailscaleAddress: '',
-  tailscaleAuthKey: '',
   description: '',
   version: '0.0.1',
 }
 
 /**
  * Espacio de trabajo de Paput Studio (solo para el dueño). Crea/edita grupos e instancias,
- * importa modpacks (.mrpack), vincula carpetas, publica/oculta y genera referencias.
+ * importa modpacks (.mrpack), vincula carpetas y publica u oculta contenido.
  */
 export function DevPanel({ onClose }: DevPanelProps) {
   const [groups, setGroups] = useState<DevGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [copied, setCopied] = useState<string | null>(null)
+  const [showCloseGuard, setShowCloseGuard] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
   const [newGroup, setNewGroup] = useState('')
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
   const [addingFor, setAddingFor] = useState<string | null>(null)
   const [form, setForm] = useState<NewInstance>(EMPTY_FORM)
   const [showR2, setShowR2] = useState(false)
   const [showR2Manager, setShowR2Manager] = useState(false)
+  const [showPaputAccess, setShowPaputAccess] = useState(false)
+  const [pendingAccessCount, setPendingAccessCount] = useState(0)
   const [r2, setR2] = useState<R2ConfigView | null>(null)
   const [pubProgress, setPubProgress] = useState<{ label: string; fraction: number } | null>(null)
+  const [publishMeta, setPublishMeta] = useState<{ finishedAt: number; elapsedMs: number } | null>(null)
   const [r2Test, setR2Test] = useState<{ ok: boolean; message: string } | null>(null)
   const [testing, setTesting] = useState(false)
+  const [optimizing, setOptimizing] = useState(false)
+  const [cleaningStorage, setCleaningStorage] = useState(false)
+  const [storageStats, setStorageStats] = useState<ContentStoreStats | null>(null)
+  const [storageProgress, setStorageProgress] = useState<{ label: string; fraction: number } | null>(null)
+  const [storageNotice, setStorageNotice] = useState<string | null>(null)
   const [loaderVersions, setLoaderVersions] = useState<string[]>([])
   const [loadingVer, setLoadingVer] = useState(false)
   // Import en curso: { groupId, label, fraction } | null
   const [importing, setImporting] = useState<{ groupId: string; label: string; fraction: number } | null>(null)
+  const [importResult, setImportResult] = useState<({ ok: true } & MrImportSummary) | { ok: false; message: string } | null>(null)
   // Edición de una instancia: { groupId, instanceId } + sus campos.
   const [editing, setEditing] = useState<{ groupId: string; instanceId: string } | null>(null)
+  const [editTab, setEditTab] = useState<'info' | 'game' | 'server' | 'look'>('info')
   const [editForm, setEditForm] = useState<InstancePatch>({})
   // Panel de mods abierto: { groupId, instanceId } + lista.
   const [modsFor, setModsFor] = useState<{ groupId: string; instanceId: string } | null>(null)
@@ -56,12 +77,51 @@ export function DevPanel({ onClose }: DevPanelProps) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
 
   async function reload() {
-    setGroups(await window.tenso.devListGroups())
-    setR2(await window.tenso.getR2Config())
+    const [nextGroups, nextR2, nextStorageStats] = await Promise.all([
+      window.tenso.devListGroups(),
+      window.tenso.getR2Config(),
+      window.tenso.devStorageStats(),
+    ])
+    setGroups(nextGroups)
+    setR2(nextR2)
+    setStorageStats(nextStorageStats)
     setLoading(false)
   }
   useEffect(() => {
-    reload()
+    window.tenso.devBeginDraft().then(reload).catch((error) => {
+      console.error('No se pudo iniciar el borrador de Studio:', error)
+      reload()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!dirty) {
+      setShowCloseGuard(false)
+      setCloseError(null)
+    }
+  }, [dirty])
+
+  // Mientras Studio está abierto, actualiza el contador. Las notificaciones
+  // nativas viven en el proceso principal para funcionar con la ventana oculta.
+  useEffect(() => {
+    let cancelled = false
+    async function checkAccess() {
+      try {
+        const status = await window.tenso.paputAdminStatus()
+        if (!status.configured || cancelled) return
+        const requests = await window.tenso.paputAdminEnrollments('pending')
+        if (cancelled) return
+        setPendingAccessCount(requests.length)
+      } catch {
+        // La bandeja de acceso mostrará el error detallado al abrirla.
+      }
+    }
+    void checkAccess()
+    const timer = window.setInterval(checkAccess, 60_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [])
 
   // Progreso de la importación de .mrpack.
@@ -77,6 +137,45 @@ export function DevPanel({ onClose }: DevPanelProps) {
     const off = window.tenso.onDevPublishProgress((p) => setPubProgress(p))
     return off
   }, [])
+
+  useEffect(() => window.tenso.onDevStorageProgress(setStorageProgress), [])
+
+  async function optimizeStorage() {
+    setOptimizing(true)
+    setStorageNotice(null)
+    try {
+      const result = await window.tenso.devOptimizeStorage()
+      const saved = (result.savedBytes / 1024 / 1024).toFixed(1)
+      const failures = result.failedFiles ? ` · ${result.failedFiles} no se pudieron optimizar` : ''
+      setStorageNotice(`${result.scannedFiles} mods revisados · ${saved} MiB liberados${failures}`)
+      setStorageStats(await window.tenso.devStorageStats())
+    } catch (error) {
+      setStorageNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setOptimizing(false)
+      setTimeout(() => setStorageProgress(null), 1200)
+    }
+  }
+
+  async function cleanStorage() {
+    if (!storageStats?.reclaimableObjects) return
+    const amount = formatBytes(storageStats.reclaimableBytes)
+    if (!confirm(`¿Liberar ${amount}? Solo se borrarán objetos que ninguna instancia utiliza.`)) return
+    setCleaningStorage(true)
+    setStorageNotice(null)
+    try {
+      const result = await window.tenso.devCleanStorage()
+      const failures = result.failedObjects ? ` · ${result.failedObjects} no se pudieron limpiar` : ''
+      setStorageNotice(
+        `${result.removedObjects} objeto${result.removedObjects === 1 ? '' : 's'} eliminado${result.removedObjects === 1 ? '' : 's'} · ${formatBytes(result.removedBytes)} liberados${failures}`,
+      )
+      setStorageStats(result.stats)
+    } catch (error) {
+      setStorageNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCleaningStorage(false)
+    }
+  }
 
   async function testR2() {
     setTesting(true)
@@ -114,6 +213,17 @@ export function DevPanel({ onClose }: DevPanelProps) {
     if (!newGroup.trim()) return
     await window.tenso.devCreateGroup(newGroup.trim())
     setNewGroup('')
+    setDirty(true)
+    await reload()
+  }
+
+  async function saveGroupName(groupId: string) {
+    const name = groupNameDraft.trim()
+    if (!name) return
+    await window.tenso.devRenameGroup(groupId, name)
+    setRenamingGroup(null)
+    setGroupNameDraft('')
+    setDirty(true)
     await reload()
   }
 
@@ -128,14 +238,13 @@ export function DevPanel({ onClose }: DevPanelProps) {
 
   function startEdit(groupId: string, inst: DevInstance) {
     setEditing({ groupId, instanceId: inst.id })
+    setEditTab('info')
     setEditForm({
       name: inst.name,
       mcVersion: inst.mcVersion,
       loader: inst.loader as NewInstance['loader'],
       loaderVersion: inst.loaderVersion,
       serverAddress: inst.serverAddress,
-      tailscaleAddress: inst.tailscaleAddress,
-      tailscaleAuthKey: inst.tailscaleAuthKey,
       description: inst.description,
       version: inst.version,
     })
@@ -171,16 +280,10 @@ export function DevPanel({ onClose }: DevPanelProps) {
       if (res) {
         setDirty(true)
         await reload()
-        const extra = res.skipped > 0 ? ` (${res.skipped} no se pudieron descargar)` : ''
-        const saved = (res.externalBytes / 1024 / 1024).toFixed(1)
-        alert(
-          `Importado "${res.name}": ${res.downloaded} archivos${extra}.\n` +
-            `${saved} MB se descargarán desde Modrinth y no ocuparán espacio en R2.\n` +
-            `Loader: ${res.loader} ${res.loaderVersion}`,
-        )
+        setImportResult({ ok: true, ...res })
       }
     } catch (e) {
-      alert(`No se pudo importar: ${e instanceof Error ? e.message : String(e)}`)
+      setImportResult({ ok: false, message: e instanceof Error ? e.message : String(e) })
     } finally {
       setImporting(null)
     }
@@ -239,16 +342,31 @@ export function DevPanel({ onClose }: DevPanelProps) {
   async function delGroup(groupId: string, name: string) {
     if (!confirm(`¿Eliminar el grupo "${name}" y TODAS sus instancias?`)) return
     await window.tenso.devDeleteGroup(groupId)
+    setDirty(true)
     await reload()
   }
 
-  async function publish() {
+  async function publish(closeAfter = false) {
     setPublishing(true)
+    setCloseError(null)
+    const startedAt = Date.now()
     setPubProgress({ label: 'Empezando…', fraction: -1 })
     try {
       await window.tenso.devPublish()
+      const finishedAt = Date.now()
+      setPublishMeta({ finishedAt, elapsedMs: finishedAt - startedAt })
+      await window.tenso.devCommitDraft()
       setDirty(false)
-      await reload()
+      setShowCloseGuard(false)
+      if (closeAfter) onClose()
+      else {
+        await window.tenso.devBeginDraft()
+        await reload()
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error)
+      setCloseError(text)
+      throw error
     } finally {
       setPublishing(false)
       // Deja ver "Publicado" un momento y luego limpia.
@@ -256,10 +374,23 @@ export function DevPanel({ onClose }: DevPanelProps) {
     }
   }
 
-  function copy(code: string) {
-    navigator.clipboard.writeText(code)
-    setCopied(code)
-    setTimeout(() => setCopied(null), 1500)
+  function requestClose() {
+    if (dirty) {
+      setCloseError(null)
+      setShowCloseGuard(true)
+    }
+    else onClose()
+  }
+
+  async function discardAndClose() {
+    setDiscarding(true)
+    try {
+      await window.tenso.devDiscardDraft()
+      setDirty(false)
+      onClose()
+    } finally {
+      setDiscarding(false)
+    }
   }
 
   const input =
@@ -285,7 +416,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
         </div>
 
         <nav className="mt-8 space-y-1">
-          <StudioNavItem active icon={<GridIcon />}>Proyectos</StudioNavItem>
+          <button onClick={() => setShowPaputAccess(false)} className="w-full text-left"><StudioNavItem active={!showPaputAccess} icon={<GridIcon />}>Proyectos</StudioNavItem></button>
           <button
             onClick={() => setShowR2(true)}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white"
@@ -298,6 +429,17 @@ export function DevPanel({ onClose }: DevPanelProps) {
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
           >
             <DatabaseIcon /> Contenido remoto
+          </button>
+          <button
+            onClick={() => setShowPaputAccess(true)}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-colors hover:bg-white/5 hover:text-white ${showPaputAccess ? 'bg-white/8 text-white' : 'text-white/45'}`}
+          >
+            <AccessIcon /> <span className="flex-1">Jugadores</span>
+            {pendingAccessCount > 0 && (
+              <span className="grid min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-black text-black">
+                {pendingAccessCount > 99 ? '99+' : pendingAccessCount}
+              </span>
+            )}
           </button>
         </nav>
 
@@ -315,7 +457,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
             Acceso local protegido. Atajo: Ctrl + Shift + D
           </p>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="flex w-full items-center gap-3 rounded-xl border border-white/8 px-3 py-2.5 text-xs font-semibold text-white/45 transition-colors hover:bg-white/5 hover:text-white"
           >
             <BackIcon /> Volver a Paput Client
@@ -323,7 +465,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`flex min-w-0 flex-1 flex-col ${showPaputAccess ? 'hidden' : ''}`}>
         <header className="flex h-[74px] shrink-0 items-center justify-between gap-4 border-b border-white/8 bg-tenso-bg/55 px-7 backdrop-blur-xl">
           <div>
             <p className="text-[10px] font-bold tracking-[0.18em] text-tenso-accent-soft uppercase">
@@ -339,17 +481,26 @@ export function DevPanel({ onClose }: DevPanelProps) {
               </span>
             )}
             <button
-              onClick={publish}
+              onClick={optimizeStorage}
+              disabled={optimizing || publishing}
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/70 transition-colors hover:border-tenso-accent/50 hover:text-white disabled:opacity-50"
+              title="Deduplica los mods de High y Low sin cambiar sus carpetas"
+            >
+              <DatabaseIcon />
+              {optimizing ? 'Optimizando…' : 'Optimizar espacio'}
+            </button>
+            <button
+              onClick={() => void publish(false).catch(() => undefined)}
               disabled={publishing}
               className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all active:scale-[0.98] disabled:opacity-60 ${
                 dirty
                   ? 'bg-tenso-accent text-[#17120a] hover:bg-tenso-accent-soft'
-                  : 'border border-white/8 bg-white/5 text-white/40'
+                  : 'border border-white/12 bg-white/6 text-white/70 hover:border-tenso-accent/40 hover:text-white'
               }`}
               title="Genera los manifiestos y los sube a R2"
             >
               <PublishIcon />
-              {publishing ? 'Publicando…' : 'Publicar cambios'}
+              {publishing ? 'Publicando…' : dirty ? 'Publicar cambios' : 'Republicar todo'}
             </button>
           </div>
         </header>
@@ -369,6 +520,33 @@ export function DevPanel({ onClose }: DevPanelProps) {
           </div>
         )}
 
+        {publishMeta && !pubProgress && (
+          <div className="border-b border-white/8 bg-tenso-panel/70 px-7 py-2 text-[10px] text-emerald-300/75">
+            Última publicación: {formatTime(publishMeta.finishedAt)} · Duración {formatDuration(publishMeta.elapsedMs)}
+          </div>
+        )}
+
+        {(storageProgress || storageNotice) && (
+          <div className="border-b border-white/8 bg-tenso-panel/70 px-7 py-2 backdrop-blur">
+            <div className="mb-1 flex justify-between text-[10px]">
+              <span className="truncate text-white/70">
+                {storageProgress?.label ?? storageNotice}
+              </span>
+              {storageProgress && storageProgress.fraction >= 0 && (
+                <span className="text-white/35">{Math.round(storageProgress.fraction * 100)}%</span>
+              )}
+            </div>
+            {storageProgress && (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-full rounded-full bg-tenso-accent transition-[width] duration-200"
+                  style={{ width: `${Math.max(0, storageProgress.fraction) * 100}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl p-7">
             <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -377,6 +555,55 @@ export function DevPanel({ onClose }: DevPanelProps) {
               <StudioStat label="Publicadas" value={totalPublished} detail="visibles al jugador" accent />
               <StudioStat label="Distribución" value={r2 ? 'Híbrida' : 'Local'} detail={r2 ? 'Modrinth + R2' : 'sin publicar'} />
             </div>
+
+            <section className="mb-6 rounded-2xl border border-tenso-border bg-tenso-panel p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-bold tracking-wide text-tenso-muted uppercase">
+                    Almacenamiento local compartido
+                  </p>
+                  <p className="mt-1 text-xs text-tenso-muted">
+                    Mods de Studio y del jugador medidos por archivos físicos, no por tamaño de carpeta.
+                  </p>
+                </div>
+                <button
+                  onClick={cleanStorage}
+                  disabled={cleaningStorage || optimizing || !storageStats?.reclaimableObjects}
+                  className="rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-semibold text-tenso-muted transition-colors hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Borra solamente objetos sin ningún enlace de uso"
+                >
+                  {cleaningStorage
+                    ? 'Limpiando…'
+                    : storageStats?.reclaimableObjects
+                      ? `Liberar ${formatBytes(storageStats.reclaimableBytes)}`
+                      : 'Sin basura'}
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StorageMetric
+                  label="Físico"
+                  value={formatBytes(storageStats?.physicalBytes ?? 0)}
+                  detail={`${storageStats?.objectCount ?? 0} objetos únicos`}
+                />
+                <StorageMetric
+                  label="Lógico"
+                  value={formatBytes(storageStats?.logicalBytes ?? 0)}
+                  detail={`${storageStats?.hardlinkReferences ?? 0} mods enlazados`}
+                />
+                <StorageMetric
+                  label="Ahorrado"
+                  value={formatBytes(storageStats?.savedBytes ?? 0)}
+                  detail="copias físicas evitadas"
+                  accent
+                />
+                <StorageMetric
+                  label="Recuperable"
+                  value={formatBytes(storageStats?.reclaimableBytes ?? 0)}
+                  detail={`${storageStats?.reclaimableObjects ?? 0} objetos sin uso`}
+                  warning={!!storageStats?.reclaimableObjects}
+                />
+              </div>
+            </section>
           {/* Tarjeta de configuración: crear grupo + almacenamiento (R2) */}
           <div className="mb-6 grid gap-5 rounded-2xl border border-tenso-border bg-tenso-panel p-4 sm:grid-cols-2 sm:gap-0">
             {/* Crear grupo */}
@@ -471,7 +698,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                   {/* Cabecera del grupo */}
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-tenso-border p-4">
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-bold">{g.name}</h2>
+                      {renamingGroup === g.id ? <div className="flex items-center gap-2"><input autoFocus value={groupNameDraft} onChange={(event) => setGroupNameDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void saveGroupName(g.id); if (event.key === 'Escape') setRenamingGroup(null) }} className={`${input} w-64`} /><button onClick={() => void saveGroupName(g.id)} className="rounded-lg bg-tenso-accent px-2.5 py-1.5 text-xs font-bold text-[#17120a]">Guardar</button><button onClick={() => setRenamingGroup(null)} className="px-2 py-1.5 text-xs text-tenso-muted">Cancelar</button></div> : <div className="flex items-center gap-2"><h2 className="truncate text-lg font-bold text-tenso-text">{g.name}</h2><button onClick={() => { setRenamingGroup(g.id); setGroupNameDraft(g.name) }} className="rounded px-1.5 py-1 text-xs text-tenso-muted hover:bg-white/5 hover:text-white" title="Cambiar nombre del grupo"><PencilIcon /></button></div>}
                       <p className="text-xs text-tenso-muted">
                         {g.instances.length} instancia{g.instances.length === 1 ? '' : 's'} ·{' '}
                         {g.instances.filter((i) => i.published).length} publicada
@@ -479,13 +706,6 @@ export function DevPanel({ onClose }: DevPanelProps) {
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => copy(g.code)}
-                        className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel-2 px-3 py-1.5 text-xs font-medium text-tenso-muted hover:text-tenso-text"
-                        title="Copia la referencia de contenido del grupo"
-                      >
-                        <CopyIcon /> {copied === g.code ? '¡Copiada!' : 'Referencia'}
-                      </button>
                       <button
                         onClick={() => importMrpack(g.id)}
                         disabled={!!importing}
@@ -553,9 +773,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                         ) : (
                           <input className={input} placeholder="Versión del loader" value={form.loaderVersion} onChange={(e) => setForm({ ...form, loaderVersion: e.target.value })} />
                         )}
-                        <input className={`${input} col-span-2`} placeholder="Servidor PLAYIT (ej. xxx.playit.gg:25565)" value={form.serverAddress} onChange={(e) => setForm({ ...form, serverAddress: e.target.value })} />
-                        <input className={`${input} col-span-2`} placeholder="Servidor Tailscale (ej. 100.x.x.x:25565, opcional)" value={form.tailscaleAddress ?? ''} onChange={(e) => setForm({ ...form, tailscaleAddress: e.target.value })} />
-                        <input className={`${input} col-span-2`} placeholder="Tailscale auth key (tskey-..., para modo automático, opcional)" value={form.tailscaleAuthKey ?? ''} onChange={(e) => setForm({ ...form, tailscaleAuthKey: e.target.value })} />
+                        <input className={`${input} col-span-2`} placeholder="Servidor (dominio o IP:puerto)" value={form.serverAddress} onChange={(e) => setForm({ ...form, serverAddress: e.target.value })} />
                         <input className={`${input} col-span-2`} placeholder="Requisitos / descripción (ej. Para PCs potentes, 8 GB RAM)" value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                         <button onClick={() => createInstance(g.id)} className="col-span-2 rounded-lg bg-tenso-accent py-2 text-sm font-bold text-[#17120a] hover:bg-tenso-accent-soft">
                           Crear instancia
@@ -580,7 +798,7 @@ export function DevPanel({ onClose }: DevPanelProps) {
                           <div key={inst.id} className="rounded-xl border border-tenso-border bg-tenso-panel-2/40 p-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="flex items-center gap-2 truncate font-medium">
+                                <p className="flex items-center gap-2 truncate font-medium text-tenso-text">
                                   {inst.name}
                                   <span className="shrink-0 rounded border border-tenso-accent/50 bg-tenso-accent/10 px-1.5 py-0.5 text-[10px] font-bold text-tenso-accent-soft">
                                     v{inst.version}
@@ -669,23 +887,13 @@ export function DevPanel({ onClose }: DevPanelProps) {
 
                             {/* Editor inline de la instancia */}
                             {editing?.groupId === g.id && editing.instanceId === inst.id && (
-                              <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
-                                <label className="text-xs font-semibold text-tenso-muted">Nombre</label>
-                                <label className="text-xs font-semibold text-tenso-muted">Versión de la instancia</label>
-                                <input className={input} placeholder="Nombre (ej. Castle Town Low)" value={editForm.name ?? ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-                                <input className={input} placeholder="0.0.6" value={editForm.version ?? ''} onChange={(e) => setEditForm({ ...editForm, version: e.target.value })} />
-
-                                <input className={input} placeholder="Versión MC" value={editForm.mcVersion ?? ''} onChange={(e) => setEditForm({ ...editForm, mcVersion: e.target.value })} />
-                                <select className={input} value={editForm.loader} onChange={(e) => setEditForm({ ...editForm, loader: e.target.value as NewInstance['loader'] })}>
-                                  {LOADERS.map((l) => (
-                                    <option key={l} value={l}>{l}</option>
-                                  ))}
-                                </select>
-                                <input className={`${input} col-span-2`} placeholder="Versión del loader" value={editForm.loaderVersion ?? ''} onChange={(e) => setEditForm({ ...editForm, loaderVersion: e.target.value })} />
-                                <input className={`${input} col-span-2`} placeholder="Servidor PLAYIT (ej. xxx.playit.gg:25565)" value={editForm.serverAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, serverAddress: e.target.value })} />
-                                <input className={`${input} col-span-2`} placeholder="Servidor Tailscale (ej. 100.x.x.x:25565, opcional)" value={editForm.tailscaleAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, tailscaleAddress: e.target.value })} />
-                                <input className={`${input} col-span-2`} placeholder="Tailscale auth key (tskey-..., para modo automático, opcional)" value={editForm.tailscaleAuthKey ?? ''} onChange={(e) => setEditForm({ ...editForm, tailscaleAuthKey: e.target.value })} />
-                                <textarea className={`${input} col-span-2 resize-none`} rows={2} placeholder="Requisitos / descripción (ej. RAM recomendada: 6 GB)" value={editForm.description ?? ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                              <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
+                                <div className="mb-3 flex gap-1 border-b border-tenso-border pb-2">
+                                  {([['info', 'Información'], ['game', 'Juego'], ['server', 'Servidor'], ['look', 'Presentación']] as const).map(([tab, label]) => <button key={tab} onClick={() => setEditTab(tab)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${editTab === tab ? 'bg-tenso-accent text-[#17120a]' : 'text-tenso-muted hover:bg-tenso-panel hover:text-tenso-text'}`}>{label}</button>)}
+                                </div>
+                                {editTab === 'info' && <div className="grid grid-cols-2 gap-2"><label className="text-xs font-semibold text-tenso-muted">Nombre visible</label><label className="text-xs font-semibold text-tenso-muted">Versión publicada</label><input className={input} placeholder="Nombre de la instancia" value={editForm.name ?? ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /><input className={input} placeholder="0.0.6" value={editForm.version ?? ''} onChange={(e) => setEditForm({ ...editForm, version: e.target.value })} /><textarea className={`${input} col-span-2 resize-none`} rows={3} placeholder="Descripción y requisitos" value={editForm.description ?? ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>}
+                                {editTab === 'game' && <div className="grid grid-cols-2 gap-2"><label className="text-xs font-semibold text-tenso-muted">Versión de Minecraft</label><label className="text-xs font-semibold text-tenso-muted">Loader</label><input className={input} placeholder="1.21.1" value={editForm.mcVersion ?? ''} onChange={(e) => setEditForm({ ...editForm, mcVersion: e.target.value })} /><select className={input} value={editForm.loader} onChange={(e) => setEditForm({ ...editForm, loader: e.target.value as NewInstance['loader'] })}>{LOADERS.map((l) => <option key={l} value={l}>{l}</option>)}</select><input className={`${input} col-span-2`} placeholder="Versión del loader" value={editForm.loaderVersion ?? ''} onChange={(e) => setEditForm({ ...editForm, loaderVersion: e.target.value })} /></div>}
+                                {editTab === 'server' && <div><label className="text-xs font-semibold text-tenso-muted">Dirección del servidor</label><input className={`${input} mt-2 w-full`} placeholder="dominio o IP:puerto" value={editForm.serverAddress ?? ''} onChange={(e) => setEditForm({ ...editForm, serverAddress: e.target.value })} /><p className="mt-2 text-[11px] text-tenso-muted">Se usará para Quick Play cuando el jugador pulse Jugar.</p></div>}
 
                                 <div className="col-span-2 flex flex-wrap items-center gap-2 border-t border-tenso-border pt-2">
                                   <button onClick={() => setImage(g.id, inst.id)} className="flex items-center gap-1.5 rounded-lg border border-tenso-border bg-tenso-panel px-3 py-1.5 text-xs text-tenso-muted hover:text-tenso-text">
@@ -759,8 +967,80 @@ export function DevPanel({ onClose }: DevPanelProps) {
         />
       )}
       {showR2Manager && <R2Manager onClose={() => setShowR2Manager(false)} />}
+      {showPaputAccess && (
+        <PaputAccessManager
+          embedded
+          onClose={() => setShowPaputAccess(false)}
+          onPendingChange={setPendingAccessCount}
+        />
+      )}
+      {importResult && (
+        <div className="fixed inset-0 z-[95] grid place-items-center bg-black/75 p-5 backdrop-blur-md" onClick={() => setImportResult(null)}>
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-[#191c1f] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            {importResult.ok ? (
+              <>
+                <div className="border-b border-white/8 bg-gradient-to-br from-emerald-400/10 via-transparent to-tenso-accent/10 px-6 py-6">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl border border-emerald-400/25 bg-emerald-400/12 text-2xl text-emerald-300">✓</div>
+                  <p className="mt-5 text-[10px] font-black tracking-[0.18em] text-emerald-300 uppercase">Importación completada</p>
+                  <h3 className="mt-1 text-xl font-black text-white">{importResult.name} ya está en Studio</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/45">La instancia quedó preparada como borrador. Revísala y publícala cuando estés conforme.</p>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-3 gap-3">
+                    <ImportMetric label="Archivos" value={String(importResult.downloaded)} />
+                    <ImportMetric label="Fuera de R2" value={`${(importResult.externalBytes / 1024 / 1024).toFixed(1)} MB`} accent />
+                    <ImportMetric label="Loader" value={`${importResult.loader} ${importResult.loaderVersion}`} />
+                  </div>
+                  {importResult.skipped > 0 && <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-xs text-amber-200">{importResult.skipped} archivo{importResult.skipped === 1 ? '' : 's'} no se pudieron descargar. Revisa la instancia antes de publicarla.</p>}
+                  <div className="mt-6 flex justify-end gap-2">
+                    <button onClick={() => setImportResult(null)} className="rounded-lg px-3 py-2 text-xs font-semibold text-white/50 hover:bg-white/5 hover:text-white">Seguir editando</button>
+                    <button onClick={() => { setImportResult(null); void publish().catch(() => undefined) }} disabled={publishing} className="rounded-lg bg-tenso-accent px-4 py-2 text-xs font-black text-[#17120a] disabled:opacity-40">Publicar cambios</button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="p-6">
+                <div className="grid h-11 w-11 place-items-center rounded-xl border border-red-400/20 bg-red-400/10 text-xl text-red-300">!</div>
+                <p className="mt-5 text-[10px] font-black tracking-[0.18em] text-red-300 uppercase">Importación interrumpida</p>
+                <h3 className="mt-1 text-lg font-black text-white">No pudimos preparar el modpack</h3>
+                <p className="mt-3 rounded-xl border border-red-400/15 bg-red-400/7 px-3 py-3 text-xs leading-5 text-red-100/80">{importResult.message}</p>
+                <div className="mt-5 flex justify-end"><button onClick={() => setImportResult(null)} className="rounded-lg bg-white/8 px-4 py-2 text-xs font-bold text-white hover:bg-white/12">Entendido</button></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {showCloseGuard && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#191c1f] p-6 shadow-2xl">
+            <p className="text-[10px] font-bold tracking-[0.16em] text-amber-300 uppercase">Cambios sin publicar</p>
+            <h3 className="mt-2 text-lg font-black text-white">¿Qué quieres hacer?</h3>
+            <p className="mt-2 text-sm leading-6 text-white/45">Publica para enviarlos a los jugadores o descártalos para restaurar exactamente el estado con el que abriste Studio.</p>
+            {closeError && <p className="mt-3 rounded-lg border border-red-400/20 bg-red-400/8 px-3 py-2 text-xs text-red-200">{closeError}</p>}
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button onClick={() => setShowCloseGuard(false)} disabled={publishing || discarding} className="rounded-lg px-3 py-2 text-xs font-semibold text-white/50 hover:bg-white/5 hover:text-white">Seguir editando</button>
+              <button onClick={() => void discardAndClose()} disabled={publishing || discarding} className="rounded-lg border border-red-400/20 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-400/8 disabled:opacity-40">{discarding ? 'Restaurando…' : 'Descartar cambios'}</button>
+              <button onClick={() => void publish(true).catch(() => undefined)} disabled={publishing || discarding} className="rounded-lg bg-tenso-accent px-4 py-2 text-xs font-black text-[#17120a] disabled:opacity-40">{publishing ? 'Publicando…' : 'Publicar y salir'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function ImportMetric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return <div className="min-w-0 rounded-xl border border-white/8 bg-black/15 px-3 py-3"><p className="text-[9px] font-bold tracking-wider text-white/35 uppercase">{label}</p><p className={`mt-1 truncate text-sm font-black ${accent ? 'text-emerald-300' : 'text-white'}`} title={value}>{value}</p></div>
+}
+
+function formatDuration(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000))
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+
+function formatTime(timestamp: number): string {
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'short', timeStyle: 'short' }).format(timestamp)
 }
 
 /** Ítem de un menú desplegable "···". */
@@ -846,6 +1126,46 @@ function StudioStat({
   )
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KiB', 'MiB', 'GiB', 'TiB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unit]}`
+}
+
+function StorageMetric({
+  label,
+  value,
+  detail,
+  accent = false,
+  warning = false,
+}: {
+  label: string
+  value: string
+  detail: string
+  accent?: boolean
+  warning?: boolean
+}) {
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-3">
+      <p className="text-[9px] font-bold tracking-[0.14em] text-white/35 uppercase">{label}</p>
+      <p
+        className={`mt-1 text-lg font-black ${
+          accent ? 'text-emerald-300' : warning ? 'text-amber-300' : 'text-white'
+        }`}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-[10px] text-white/35">{detail}</p>
+    </div>
+  )
+}
+
 function StudioIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -875,6 +1195,14 @@ function DatabaseIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
       <ellipse cx="12" cy="5" rx="8" ry="3" />
       <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
+    </svg>
+  )
+}
+function AccessIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3 5 6v5c0 4.6 2.8 8.3 7 10 4.2-1.7 7-5.4 7-10V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   )
 }
@@ -914,14 +1242,6 @@ function PlusIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  )
-}
-function CopyIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
   )
 }

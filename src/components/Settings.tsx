@@ -137,13 +137,13 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
           </div>
         </div>
 
-        {/* Base local que usará el futuro backend + PaputAuth. */}
+        {/* Identidad local usada por el backend y PaputAuth. */}
         <div className="mt-4 rounded-xl border border-tenso-border bg-tenso-panel-2 p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Identidad de este dispositivo</p>
               <p className="mt-1 text-xs leading-5 text-tenso-muted">
-                La clave privada permanece cifrada en este equipo. Worker/D1 y PaputAuth usarán
+                La clave privada permanece cifrada en este equipo. Worker/D1 y PaputAuth usan
                 únicamente la parte pública para aprobar conexiones.
               </p>
             </div>
@@ -294,13 +294,13 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
             </div>
         </div>
 
-        {/* --- Eliminar instancia (zona de peligro) --- */}
+        {/* --- Borrar datos locales (zona de peligro) --- */}
         {groups.length > 0 && (
           <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 p-3">
-            <p className="mb-1 text-xs font-bold tracking-wide text-red-300/90 uppercase">Eliminar instancia</p>
+            <p className="mb-1 text-xs font-bold tracking-wide text-red-300/90 uppercase">Borrar datos locales</p>
             <p className="mb-3 text-xs text-tenso-muted">
-              Borra por completo una instancia de tu equipo (mods, mundos y ajustes). Útil si quedó
-              rota o "fantasma" y no se deja limpiar. Necesitarás su referencia para recuperarla.
+              Borra por completo el contenido local (mods, mundos y ajustes). El launcher volverá
+              a mostrar la instalación oficial y descargará sus archivos cuando juegues.
             </p>
             <div className="space-y-2">
               {groups.map((g) => (
@@ -310,7 +310,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
                     onClick={() => setConfirm({ groupId: g.groupId, name: g.name, step: 1 })}
                     className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/15"
                   >
-                    Eliminar
+                    Borrar datos
                   </button>
                 </div>
               ))}
@@ -352,7 +352,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
             <div className="anim-fade-in-scale w-full max-w-sm rounded-2xl border border-red-500/40 bg-tenso-panel p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               {confirm.step === 1 ? (
                 <>
-                  <h3 className="text-base font-bold">Eliminar "{confirm.name}"</h3>
+                  <h3 className="text-base font-bold">Borrar datos de "{confirm.name}"</h3>
                   <p className="mt-2 text-sm text-tenso-muted">
                     Se borrarán del todo los <strong className="text-tenso-text">mods, mundos y ajustes</strong> de esta
                     instancia en tu equipo. Esto no se puede deshacer.
@@ -378,7 +378,7 @@ export function Settings({ onClose, onShowGuide, theme, onSetTheme, groups, onRe
                       Cancelar
                     </button>
                     <button onClick={doRemove} disabled={removing} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
-                      {removing ? 'Eliminando…' : 'Sí, eliminar'}
+                      {removing ? 'Borrando…' : 'Sí, borrar datos'}
                     </button>
                   </div>
                 </>

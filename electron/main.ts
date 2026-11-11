@@ -4,6 +4,9 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { registerIpcHandlers } from './ipc'
 import { initUpdater } from './services/updater'
+import { startAccessNotifications } from './services/access-notifications'
+import * as paputAdmin from './services/paput-admin'
+import * as dev from './services/dev'
 
 // Protocolo propio para servir archivos locales (imágenes/fondos que la jugadora
 // personaliza). Debe declararse como privilegiado ANTES de que la app esté lista
@@ -11,7 +14,7 @@ import { initUpdater } from './services/updater'
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'paput-asset',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true },
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
   },
 ])
 
@@ -25,6 +28,9 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let quitting = false
+
+app.setAppUserModelId('one.unicornio.paputclient')
 
 /** Ruta del icono para la bandeja (empaquetado: resources; dev: build/). */
 function trayIconPath(): string {
@@ -38,7 +44,7 @@ function createTray(): boolean {
   if (tray) return true
   try {
     tray = new Tray(nativeImage.createFromPath(trayIconPath()))
-    tray.setToolTip('Paput Client (jugando)')
+    tray.setToolTip('Paput Client')
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: 'Abrir Paput Client', click: () => mainWindow?.show() },
@@ -103,6 +109,15 @@ function createWindow() {
   })
   mainWindow.on('show', destroyTray)
 
+  mainWindow.on('close', (event) => {
+    // Solo el equipo administrador permanece en segundo plano. Los launchers
+    // de jugadores siguen cerrándose normalmente.
+    if (!quitting && dev.isDevMode() && paputAdmin.status().configured) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
     destroyTray()
@@ -126,20 +141,43 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     // Sirve los archivos personalizados (validando que existan) por el protocolo propio.
     protocol.handle('paput-asset', (request) => {
-      const p = new URL(request.url).searchParams.get('p')
-      if (!p || !fs.existsSync(p)) return new Response('No encontrado', { status: 404 })
-      return net.fetch(pathToFileURL(p).toString())
+      const requested = new URL(request.url).searchParams.get('p')
+      if (!requested) return new Response('No encontrado', { status: 404 })
+
+      // El renderer solo necesita leer personalizaciones que la propia app copió
+      // dentro de userData. No convertimos este protocolo en un lector arbitrario
+      // de archivos locales si alguna vista llegara a inyectar una URL manipulada.
+      const root = path.resolve(app.getPath('userData'), 'overrides')
+      const candidate = path.resolve(requested)
+      const insideOverrides =
+        candidate.toLocaleLowerCase().startsWith(`${root.toLocaleLowerCase()}${path.sep}`)
+      const allowedExtension = /\.(?:png|jpe?g|gif|webm|mp4)$/i.test(candidate)
+      let isFile = false
+      try {
+        isFile = fs.statSync(candidate).isFile()
+      } catch {
+        // La respuesta 404 también cubre rutas inexistentes o inaccesibles.
+      }
+      if (!insideOverrides || !allowedExtension || !isFile) {
+        return new Response('No encontrado', { status: 404 })
+      }
+      return net.fetch(pathToFileURL(candidate).toString())
     })
 
     registerIpcHandlers(() => mainWindow)
     createWindow()
     initUpdater(() => mainWindow)
+    startAccessNotifications(() => mainWindow)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
   })
 }
+
+app.on('before-quit', () => {
+  quitting = true
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

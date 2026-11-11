@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react'
-import type { DevContentImportResult, DevContentKind } from '../../shared/ipc'
+import type { DevContentImportResult, DevContentKind, ModrinthModResult } from '../../shared/ipc'
 
 type Mod = { name: string; enabled: boolean; bytes: number }
 type Tab = 'mods' | 'rp' | 'cfg'
@@ -56,6 +56,10 @@ export function ResourceManager({
   const [dragging, setDragging] = useState(false)
   const [adding, setAdding] = useState(false)
   const [importResult, setImportResult] = useState<DevContentImportResult | null>(null)
+  const [modrinthQuery, setModrinthQuery] = useState('')
+  const [modrinthResults, setModrinthResults] = useState<ModrinthModResult[]>([])
+  const [modrinthBusy, setModrinthBusy] = useState<string | null>(null)
+  const [modrinthError, setModrinthError] = useState<string | null>(null)
 
   const filtered = useMemo(
     () => mods.filter((m) => m.name.toLowerCase().includes(q.toLowerCase())),
@@ -131,6 +135,44 @@ export function ResourceManager({
     chooseFiles()
   }
 
+  async function searchModrinth() {
+    const query = modrinthQuery.trim()
+    if (query.length < 2 || modrinthBusy) return
+    setModrinthBusy('search')
+    setModrinthError(null)
+    try {
+      setModrinthResults(await window.tenso.devSearchModrinthMods(groupId, instanceId, query))
+    } catch (error) {
+      setModrinthResults([])
+      setModrinthError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setModrinthBusy(null)
+    }
+  }
+
+  async function installFromModrinth(result: ModrinthModResult) {
+    if (modrinthBusy) return
+    setModrinthBusy(result.versionId)
+    setModrinthError(null)
+    try {
+      const installed = await window.tenso.devInstallModrinthMod(groupId, instanceId, result.versionId)
+      if (installed.installed.length > 0) {
+        setImportResult({
+          imported: installed.installed,
+          replaced: installed.replaced,
+          rejected: [],
+          cancelled: false,
+        })
+        setModrinthResults((current) => current.filter((item) => item.projectId !== result.projectId))
+        await onContentChanged()
+      }
+    } catch (error) {
+      setModrinthError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setModrinthBusy(null)
+    }
+  }
+
   return (
     <div className="mt-3 rounded-xl border border-tenso-border bg-tenso-panel-2/50 p-3">
       {/* Pestañas */}
@@ -199,6 +241,63 @@ export function ResourceManager({
             <span className="text-xs text-tenso-muted">
               <span className="font-bold text-green-400">{activeCount} activos</span> de {mods.length} · {activeMb} MB
             </span>
+          </div>
+
+          <div className="mb-3 rounded-xl border border-tenso-border bg-tenso-panel p-3">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-[210px] flex-1">
+                <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-tenso-muted">
+                  <SearchIcon />
+                </span>
+                <input
+                  value={modrinthQuery}
+                  onChange={(event) => { setModrinthQuery(event.target.value); setModrinthError(null) }}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void searchModrinth() }}
+                  placeholder="Buscar un mod compatible en Modrinth"
+                  spellCheck={false}
+                  className="w-full rounded-lg border border-tenso-border bg-tenso-panel-2 py-2 pr-3 pl-8 text-xs text-tenso-text outline-none focus:border-tenso-accent"
+                />
+              </div>
+              <button
+                onClick={() => void searchModrinth()}
+                disabled={modrinthQuery.trim().length < 2 || modrinthBusy !== null}
+                className="rounded-lg bg-tenso-accent px-3 py-2 text-xs font-bold text-[#17120a] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {modrinthBusy === 'search' ? 'Buscando…' : 'Buscar en Modrinth'}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-tenso-muted">
+              Studio muestra sólo versiones compatibles e instala también sus dependencias obligatorias.
+            </p>
+            {modrinthError && <p className="mt-2 text-xs text-red-300">{modrinthError}</p>}
+            {modrinthResults.length > 0 && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {modrinthResults.map((result) => (
+                  <div key={result.versionId} className="flex min-w-0 items-center gap-3 rounded-xl border border-tenso-border bg-tenso-panel-2 p-2.5">
+                    {result.iconUrl ? (
+                      <img src={result.iconUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                    ) : (
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-tenso-accent/15 font-black text-tenso-accent-soft">
+                        {result.title.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-tenso-text">{result.title}</p>
+                      <p className="truncate text-[11px] text-tenso-muted">
+                        {result.versionNumber} · {fmtSize(result.fileSize)}{result.author ? ` · ${result.author}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void installFromModrinth(result)}
+                      disabled={modrinthBusy !== null}
+                      className="shrink-0 rounded-lg border border-tenso-accent/50 bg-tenso-accent/10 px-2.5 py-1.5 text-xs font-semibold text-tenso-accent-soft disabled:opacity-40"
+                    >
+                      {modrinthBusy === result.versionId ? 'Instalando…' : 'Añadir'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {mods.length === 0 ? (

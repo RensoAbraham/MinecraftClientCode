@@ -26,6 +26,10 @@ try {
       loader: 'neoforge',
       loaderVersion: '21.1.1',
       serverAddress: 'localhost:25565',
+      // Compatibilidad con metadatos antiguos: el publicador debe ignorar
+      // cualquier campo de la integración de red retirada.
+      tailscaleAddress: '100.64.0.1:25565',
+      tailscaleAuthKey: 'legacy-secret-must-not-be-published',
     }),
   )
   fs.writeFileSync(
@@ -52,13 +56,20 @@ try {
 
   publishGroup(root, 'friends', 'https://packs.example.com')
   const manifest = JSON.parse(fs.readFileSync(path.join(instanceDir, 'modpack.json'), 'utf8')) as {
-    files: { name: string; path: string; url: string }[]
+    files: { name: string; path: string; url: string; sha1: string; sha512: string }[]
   }
   const external = manifest.files.find((file) => file.name === 'example.jar')
   const custom = manifest.files.find((file) => file.name === 'paput.cfg')
+  const publishedGroup = JSON.parse(
+    fs.readFileSync(path.join(root, 'friends', 'group.json'), 'utf8'),
+  ) as { instances: Record<string, unknown>[] }
 
   assert.equal(external?.url, 'https://cdn.modrinth.com/data/project/versions/file.jar')
+  assert.equal(external?.sha1, crypto.createHash('sha1').update(mod).digest('hex'))
+  assert.equal(external?.sha512, crypto.createHash('sha512').update(mod).digest('hex'))
   assert.equal(custom?.url, 'https://packs.example.com/friends/hybrid-pack/files/config/paput.cfg')
+  assert.equal('tailscaleAddress' in publishedGroup.instances[0], false)
+  assert.equal('tailscaleAuthKey' in publishedGroup.instances[0], false)
 
   // Si el dueño modifica un archivo del pack, deja de confiar en la fuente
   // original y lo publica como archivo propio en R2.

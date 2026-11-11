@@ -2,17 +2,28 @@ import { app, dialog, shell, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import extract from 'extract-zip'
+import { safeExtractZip } from './safe-zip'
+import { installMod as installModrinthMod, searchMods as searchModrinthMods } from './modrinth-api'
 import type {
   DevContentImportResult,
   DevContentKind,
   DevGroup,
   NewInstance,
+  ModrinthInstallResult,
+  ModrinthModResult,
 } from '../../shared/ipc'
-import { encodeGroupCode } from '../../shared/instance-code'
 import { publishGroup, listGroupIds, EXCLUDED_TOP } from '../../shared/publisher'
+import { PAPUT_API_URL } from '../config'
 import * as r2 from './r2'
 import { importMrpack as runImportMrpack, type ImportProgress, type MrImportResult } from './importers/mrpack'
+import {
+  cleanContentStore,
+  contentStoreStats,
+  installStoredFile,
+  optimizeInstanceStorage,
+  optimizeStudioStorage,
+  type ContentStoreProgress,
+} from './content-store'
 
 /**
  * Servicio de PAPUT STUDIO (solo para el dueño).
@@ -21,16 +32,21 @@ import { importMrpack as runImportMrpack, type ImportProgress, type MrImportResu
  *   marcador `dev.enabled` en userData. Las copias de los jugadores no lo
  *   tienen, así que nunca ven Studio.
  * - Gestiona los grupos/instancias locales: listar, publicar/ocultar y generar
- *   manifiestos + códigos de grupo.
+ *   los manifiestos del grupo oficial.
  *
  * NOTA (Fase 6): la URL base es la del servidor local. En la integración de R2
  * pasará a ser la URL pública del bucket (configurable en ajustes).
  */
 
 const LOCAL_BASE_URL = process.env.MODPACK_BASE_URL ?? 'http://localhost:8080'
+const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/
+
+function assertSafeId(value: string, label: string): void {
+  if (!SAFE_ID.test(value)) throw new Error(`${label} no válido.`)
+}
 
 /**
- * URL base que se embebe en los códigos de grupo y en las URLs del manifiesto.
+ * URL base que se usa en las URLs del manifiesto publicado.
  * Si R2 está configurado, usa su URL pública; si no, el servidor local (dev).
  */
 function baseUrl(): string {
@@ -40,6 +56,82 @@ function baseUrl(): string {
 /** Raíz de los modpacks del dev. En desarrollo: ./modpack; empaquetado: userData. */
 function modpackRoot(): string {
   return app.isPackaged ? path.join(app.getPath('userData'), 'modpacks') : path.resolve('modpack')
+}
+
+/** Objetos inmutables compartidos por todas las instancias locales de Studio. */
+function contentStoreRoot(): string {
+  // Windows solo permite hardlinks dentro del mismo volumen. En desarrollo el
+  // proyecto puede estar en D: mientras userData vive en C:, por lo que el
+  // almacén de Studio debe acompañar a la carpeta de modpacks.
+  return app.isPackaged
+    ? path.join(app.getPath('userData'), 'content', 'objects')
+    : path.join(path.dirname(modpackRoot()), '.paput-content', 'objects')
+}
+
+function draftRoot(): string {
+  return path.join(path.dirname(modpackRoot()), '.paput-draft-snapshot')
+}
+
+function cloneTree(source: string, destination: string): void {
+  if (!fs.existsSync(source)) { fs.mkdirSync(destination, { recursive: true }); return }
+  fs.mkdirSync(destination, { recursive: true })
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name)
+    const to = path.join(destination, entry.name)
+    if (entry.isDirectory()) cloneTree(from, to)
+    else if (entry.isFile()) {
+      // Los mods son inmutables y las operaciones de Studio los reemplazan por
+      // rename, así que un hardlink conserva el original sin duplicar gigabytes.
+      if (/\.jar(?:\.disabled)?$/i.test(entry.name)) fs.linkSync(from, to)
+      else {
+        try { fs.copyFileSync(from, to, fs.constants.COPYFILE_FICLONE) }
+        catch { fs.copyFileSync(from, to) }
+      }
+    }
+  }
+}
+
+/** Abre una transacción local para poder descartar todos los cambios de Studio. */
+export function beginDraft(): void {
+  const snapshot = draftRoot()
+  fs.rmSync(snapshot, { recursive: true, force: true })
+  cloneTree(modpackRoot(), snapshot)
+}
+
+/** Confirma el estado actual y elimina la copia de recuperación. */
+export function commitDraft(): void {
+  fs.rmSync(draftRoot(), { recursive: true, force: true })
+}
+
+/** Restaura exactamente el estado existente cuando se abrió Studio. */
+export function discardDraft(): void {
+  const snapshot = draftRoot()
+  if (!fs.existsSync(snapshot)) throw new Error('No existe un borrador recuperable.')
+  const root = modpackRoot()
+  const quarantine = `${root}.paput-discard-${process.pid}-${Date.now()}`
+  if (fs.existsSync(root)) fs.renameSync(root, quarantine)
+  try {
+    cloneTree(snapshot, root)
+    fs.rmSync(quarantine, { recursive: true, force: true })
+    fs.rmSync(snapshot, { recursive: true, force: true })
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true })
+    if (fs.existsSync(quarantine)) fs.renameSync(quarantine, root)
+    throw error
+  }
+}
+
+/** Compacta las instancias existentes sin cambiar sus rutas visibles. */
+export async function optimizeStorage(onProgress?: ContentStoreProgress) {
+  return optimizeStudioStorage(modpackRoot(), contentStoreRoot(), onProgress)
+}
+
+export function storageStats() {
+  return contentStoreStats(contentStoreRoot())
+}
+
+export function cleanStorage() {
+  return cleanContentStore(contentStoreRoot())
 }
 
 export function isDevMode(): boolean {
@@ -75,8 +167,6 @@ export function listGroups(): DevGroup[] {
             loader: m.loader ?? '',
             loaderVersion: m.loaderVersion ?? '',
             serverAddress: m.serverAddress ?? '',
-            tailscaleAddress: m.tailscaleAddress ?? '',
-            tailscaleAuthKey: m.tailscaleAuthKey ?? '',
             description: m.description ?? '',
             version: m.version ?? '0.0.1',
             hasImage: fs.existsSync(path.join(instDir, 'icon.png')),
@@ -91,12 +181,14 @@ export function listGroups(): DevGroup[] {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
 
-    return { id: groupId, name, instances, code: encodeGroupCode({ baseUrl: baseUrl(), groupId }) }
+    return { id: groupId, name, instances }
   })
 }
 
 /** Marca una instancia como publicada u oculta (edita su instance.json). */
 export function setPublished(groupId: string, instanceId: string, published: boolean): void {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const metaPath = path.join(modpackRoot(), groupId, instanceId, 'instance.json')
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
   meta.published = published
@@ -131,6 +223,8 @@ export function listMods(
   groupId: string,
   instanceId: string,
 ): { name: string; enabled: boolean; bytes: number }[] {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const modsDir = path.join(modpackRoot(), groupId, instanceId, 'mods')
   let files: string[] = []
   try {
@@ -163,6 +257,9 @@ export function setModEnabled(
   name: string,
   enabled: boolean,
 ): void {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
+  if (path.basename(name) !== name || !name.endsWith('.jar')) throw new Error('Nombre de mod no válido.')
   const modsDir = path.join(modpackRoot(), groupId, instanceId, 'mods')
   const active = path.join(modsDir, name)
   const disabled = path.join(modsDir, `${name}.disabled`)
@@ -177,6 +274,8 @@ export function setModEnabled(
  * (se gestionan en Dev) ni datos personales/basura (saves, logs, etc.).
  */
 export function pullGameConfig(groupId: string, instanceId: string): { copied: number } {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const gameRoot = gameRootDir()
   const dest = path.join(modpackRoot(), groupId, instanceId)
   const ITEMS = ['config', 'defaultconfigs', 'resourcepacks', 'options.txt']
@@ -205,6 +304,8 @@ export function pullGameConfig(groupId: string, instanceId: string): { copied: n
 
 /** Abre la carpeta de una instancia en el explorador del sistema. */
 export async function openInstanceFolder(groupId: string, instanceId: string): Promise<void> {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   await shell.openPath(path.join(modpackRoot(), groupId, instanceId))
 }
 
@@ -235,6 +336,8 @@ function emptyImportResult(): DevContentImportResult {
 }
 
 function instanceDir(groupId: string, instanceId: string): string {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const root = path.resolve(modpackRoot())
   const dir = path.resolve(root, groupId, instanceId)
   if (dir !== root && !dir.startsWith(`${root}${path.sep}`)) {
@@ -249,7 +352,7 @@ function instanceDir(groupId: string, instanceId: string): string {
 async function isResourcePack(file: string): Promise<boolean> {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'paput-resourcepack-'))
   try {
-    await extract(file, { dir: temp })
+    await safeExtractZip(file, temp)
     return fs.existsSync(path.join(temp, 'pack.mcmeta'))
   } catch {
     return false
@@ -362,6 +465,8 @@ export async function importContentPaths(
     fs.mkdirSync(path.dirname(copy.destination), { recursive: true })
     if (fs.statSync(copy.source).isDirectory()) {
       fs.cpSync(copy.source, copy.destination, { recursive: true, force: true })
+    } else if (kind === 'mod') {
+      installStoredFile(copy.source, copy.destination, contentStoreRoot())
     } else {
       fs.copyFileSync(copy.source, copy.destination)
     }
@@ -393,6 +498,55 @@ export async function addContent(
   return importContentPaths(window, groupId, instanceId, kind, selection.filePaths)
 }
 
+function compatibleInstance(groupId: string, instanceId: string): {
+  dir: string
+  mcVersion: string
+  loader: NewInstance['loader']
+  loaderVersion: string
+} {
+  const dir = instanceDir(groupId, instanceId)
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, 'instance.json'), 'utf8')) as Partial<NewInstance>
+  const loaders = new Set<NewInstance['loader']>(['neoforge', 'forge', 'fabric', 'quilt', 'vanilla'])
+  if (!meta.mcVersion || !meta.loader || !loaders.has(meta.loader) || meta.loader === 'vanilla') {
+    throw new Error('Completa la versión de Minecraft y el loader antes de buscar mods.')
+  }
+  return {
+    dir,
+    mcVersion: meta.mcVersion,
+    loader: meta.loader,
+    loaderVersion: meta.loaderVersion ?? '',
+  }
+}
+
+/** Busca únicamente versiones compatibles con la instancia elegida. */
+export async function searchModrinth(
+  groupId: string,
+  instanceId: string,
+  query: string,
+): Promise<ModrinthModResult[]> {
+  const meta = compatibleInstance(groupId, instanceId)
+  return searchModrinthMods(query, meta.mcVersion, meta.loader)
+}
+
+/** Descarga el mod y sus dependencias obligatorias, y conserva sus fuentes CDN. */
+export async function installModrinth(
+  window: BrowserWindow | null,
+  groupId: string,
+  instanceId: string,
+  versionId: string,
+): Promise<ModrinthInstallResult> {
+  const meta = compatibleInstance(groupId, instanceId)
+  return installModrinthMod(
+    window,
+    versionId,
+    meta.dir,
+    contentStoreRoot(),
+    meta.mcVersion,
+    meta.loader,
+    meta.loaderVersion,
+  )
+}
+
 /** Convierte un nombre en un id seguro para carpeta (slug). */
 function slug(name: string): string {
   return (
@@ -417,8 +571,22 @@ export function createGroup(name: string): string {
   return groupId
 }
 
+/** Cambia solo la etiqueta visible; la carpeta/id permanece estable. */
+export function renameGroup(groupId: string, name: string): void {
+  assertSafeId(groupId, 'Grupo')
+  const clean = name.trim()
+  if (clean.length < 1 || clean.length > 80) throw new Error('El nombre del grupo debe tener entre 1 y 80 caracteres.')
+  const groupDir = path.join(modpackRoot(), groupId)
+  const groupJson = path.join(groupDir, 'group.json')
+  if (!fs.existsSync(groupDir)) throw new Error('Grupo no encontrado.')
+  let current: { instances?: unknown[] } = {}
+  try { current = JSON.parse(fs.readFileSync(groupJson, 'utf8')) as { instances?: unknown[] } } catch { /* se reconstruye */ }
+  fs.writeFileSync(groupJson, JSON.stringify({ name: clean, instances: current.instances ?? [] }, null, 2))
+}
+
 /** Crea una instancia nueva dentro de un grupo (instance.json, oculta por defecto). */
 export function createInstance(groupId: string, meta: NewInstance): string {
+  assertSafeId(groupId, 'Grupo')
   const instanceId = slug(meta.name)
   const instDir = path.join(modpackRoot(), groupId, instanceId)
   fs.mkdirSync(path.join(instDir, 'mods'), { recursive: true })
@@ -432,8 +600,6 @@ export function createInstance(groupId: string, meta: NewInstance): string {
         loader: meta.loader,
         loaderVersion: meta.loaderVersion,
         serverAddress: meta.serverAddress,
-        tailscaleAddress: meta.tailscaleAddress ?? '',
-        tailscaleAuthKey: meta.tailscaleAuthKey ?? '',
         description: meta.description ?? '',
         version: meta.version ?? '0.0.1',
         published: false,
@@ -451,9 +617,11 @@ export function updateInstance(
   instanceId: string,
   patch: Partial<NewInstance>,
 ): void {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const metaPath = path.join(modpackRoot(), groupId, instanceId, 'instance.json')
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
-  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'tailscaleAddress', 'tailscaleAuthKey', 'description', 'version'] as const) {
+  for (const key of ['name', 'mcVersion', 'loader', 'loaderVersion', 'serverAddress', 'description', 'version'] as const) {
     if (patch[key] !== undefined) meta[key] = patch[key]
   }
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
@@ -468,6 +636,8 @@ export async function setInstanceImage(
   groupId: string,
   instanceId: string,
 ): Promise<boolean> {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const res = await dialog.showOpenDialog(window ?? undefined!, {
     title: 'Elige la imagen de la instancia (PNG/JPG)',
     filters: [{ name: 'Imagen', extensions: ['png', 'jpg', 'jpeg'] }],
@@ -487,6 +657,8 @@ export async function setInstanceBackground(
   groupId: string,
   instanceId: string,
 ): Promise<boolean> {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const res = await dialog.showOpenDialog(window ?? undefined!, {
     title: 'Elige el fondo de la instancia (imagen, GIF o vídeo)',
     filters: [{ name: 'Fondo', extensions: ['mp4', 'webm', 'gif', 'png', 'jpg', 'jpeg'] }],
@@ -506,11 +678,14 @@ export async function setInstanceBackground(
 
 /** Elimina una instancia (su carpeta completa). */
 export function deleteInstance(groupId: string, instanceId: string): void {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   fs.rmSync(path.join(modpackRoot(), groupId, instanceId), { recursive: true, force: true })
 }
 
 /** Elimina un grupo completo. */
 export function deleteGroup(groupId: string): void {
+  assertSafeId(groupId, 'Grupo')
   fs.rmSync(path.join(modpackRoot(), groupId), { recursive: true, force: true })
 }
 
@@ -523,6 +698,8 @@ export async function importFolder(
   groupId: string,
   instanceId: string,
 ): Promise<boolean> {
+  assertSafeId(groupId, 'Grupo')
+  assertSafeId(instanceId, 'Instancia')
   const result = await dialog.showOpenDialog(window ?? undefined!, {
     title: 'Elige la carpeta con tus mods/configs',
     properties: ['openDirectory'],
@@ -537,7 +714,17 @@ export async function importFolder(
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const ok = entry.isDirectory() ? INCLUDE_DIRS.has(entry.name) : INCLUDE_FILES.has(entry.name)
     if (!ok) continue
-    fs.cpSync(path.join(src, entry.name), path.join(destDir, entry.name), { recursive: true })
+    const source = path.join(src, entry.name)
+    const destination = path.join(destDir, entry.name)
+    if (entry.isDirectory() && entry.name === 'mods') {
+      fs.mkdirSync(destination, { recursive: true })
+      for (const mod of fs.readdirSync(source, { withFileTypes: true })) {
+        if (!mod.isFile() || (!mod.name.endsWith('.jar') && !mod.name.endsWith('.jar.disabled'))) continue
+        installStoredFile(path.join(source, mod.name), path.join(destination, mod.name), contentStoreRoot())
+      }
+    } else {
+      fs.cpSync(source, destination, { recursive: true })
+    }
   }
   return true
 }
@@ -551,7 +738,26 @@ export async function importMrpack(
   groupId: string,
   onProgress?: ImportProgress,
 ): Promise<MrImportResult | null> {
-  return runImportMrpack(window, modpackRoot(), groupId, onProgress)
+  assertSafeId(groupId, 'Grupo')
+  const result = await runImportMrpack(window, modpackRoot(), groupId, onProgress)
+  if (result) {
+    try {
+      await optimizeInstanceStorage(
+        path.join(modpackRoot(), groupId, result.instanceId),
+        contentStoreRoot(),
+        onProgress,
+      )
+    } catch (error) {
+      // Optimizar es opcional: una limitación del disco no debe convertir una
+      // importación válida y ya terminada en un fallo total.
+      console.warn(
+        '[dev.importMrpack] Importado sin optimizar almacenamiento:',
+        error instanceof Error ? error.message : String(error),
+      )
+      onProgress?.({ label: 'Importado (sin optimización de espacio)', fraction: 1 })
+    }
+  }
+  return result
 }
 
 /**
@@ -574,6 +780,30 @@ function bumpPublishedVersions(root: string, groupId: string): void {
   }
 }
 
+/** Evita publicar variantes que apunten accidentalmente a servidores distintos. */
+function validatePaputAuth(root: string, groupId: string): void {
+  if (!PAPUT_API_URL) return
+  const groupDir = path.join(root, groupId)
+  const addresses = new Set<string>()
+  for (const entry of fs.readdirSync(groupDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const instanceDir = path.join(groupDir, entry.name)
+    const metaPath = path.join(instanceDir, 'instance.json')
+    if (!fs.existsSync(metaPath)) continue
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as {
+      name?: string
+      published?: boolean
+      serverAddress?: string
+    }
+    if (meta.published !== true) continue
+    const address = meta.serverAddress?.trim()
+    if (address) addresses.add(address.toLowerCase())
+  }
+  if (addresses.size > 1) {
+    throw new Error('Las variantes publicadas del grupo deben apuntar al mismo servidor cuando PaputAuth está activo.')
+  }
+}
+
 /**
  * Regenera los manifiestos de todos los grupos y, si R2 está configurado, los
  * sube a la nube. Si no, solo genera local (para servir con `serve-modpack`).
@@ -587,6 +817,7 @@ export async function publishAll(
   const groupIds = listGroupIds(root)
   for (const groupId of groupIds) {
     onProgress?.({ label: `Generando manifiestos de ${groupId}…`, fraction: -1 })
+    validatePaputAuth(root, groupId)
     // Avanza el sello de versión antes de generar el manifiesto que ve el jugador.
     bumpPublishedVersions(root, groupId)
     publishGroup(root, groupId, base)

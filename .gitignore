@@ -9,6 +9,7 @@ release/
 # Variables de entorno locales (el Client ID es público, pero mantenemos
 # .env fuera del control de versiones por convención; usar .env.example).
 .env
+backend/wrangler.toml
 .env.*.local
 
 # Claves/credenciales cifradas (R2, cuentas) — viven en userData, nunca en el repo
@@ -16,6 +17,8 @@ release/
 
 # Contenido de modpacks del dev (mods, configs, videos grandes)
 modpack/
+.paput-content/
+.paput-draft-snapshot/
 
 # Notas internas (Azure, restricción de menú) — no son parte del código
 docs/

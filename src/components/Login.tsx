@@ -31,13 +31,23 @@ export function Login({ onLogin }: LoginProps) {
     setError(null)
   }
 
+  async function finishLogin(account: Account) {
+    try {
+      const access = await window.tenso.requestPaputAccess()
+      onLogin(access.account ?? account)
+    } catch {
+      // La cuenta de juego sigue siendo válida aunque PaputAuth esté temporalmente caído.
+      onLogin(account)
+    }
+  }
+
   async function handleMicrosoftLogin() {
     if (busy) return
     setBusy('microsoft')
     setError(null)
     try {
       const account = await window.tenso.login()
-      if (account) onLogin(account)
+      if (account) await finishLogin(account)
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught)
       setError(message)
@@ -52,7 +62,7 @@ export function Login({ onLogin }: LoginProps) {
     setError(null)
     try {
       const account = await window.tenso.loginOffline(offlineName)
-      if (account) onLogin(account)
+      if (account) await finishLogin(account)
       else setError('No se pudo iniciar la sesión no premium.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -131,8 +141,8 @@ export function Login({ onLogin }: LoginProps) {
           <label htmlFor="offline-name" className="text-xs font-semibold text-white/75">
             Nombre de jugador
           </label>
-          <div className="mt-2 flex items-center rounded-xl border border-white/10 bg-black/20 px-3 transition-colors focus-within:border-tenso-accent/70 focus-within:bg-black/30">
-            <span className="mr-2 text-sm text-white/25">@</span>
+          <div className="mt-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 transition-colors focus-within:border-tenso-accent/70 focus-within:bg-black/30 focus-within:ring-1 focus-within:ring-tenso-accent/15">
+            <span className="text-sm text-white/25">@</span>
             <input
               id="offline-name"
               type="text"
@@ -148,9 +158,9 @@ export function Login({ onLogin }: LoginProps) {
               autoComplete="username"
               autoFocus
               spellCheck={false}
-              className="min-w-0 flex-1 bg-transparent py-3 text-sm text-white outline-none placeholder:text-white/20"
+              className="login-name-input min-w-0 border-0 bg-transparent py-3 text-sm text-white placeholder:text-white/20"
             />
-            <span className={`text-[10px] ${offlineName.length > 16 ? 'text-red-300' : 'text-white/25'}`}>
+            <span className={`min-w-7 text-right text-[10px] tabular-nums ${offlineName.length > 16 ? 'text-red-300' : 'text-white/25'}`}>
               {offlineName.length}/16
             </span>
           </div>
@@ -161,8 +171,8 @@ export function Login({ onLogin }: LoginProps) {
           <div className="mt-4 flex gap-2 rounded-xl border border-amber-300/10 bg-amber-300/[0.045] p-3 text-[10px] leading-4 text-amber-100/55">
             <span className="mt-0.5 text-amber-200/70">◆</span>
             <p>
-              Por ahora crea una identidad local provisional. Cuando PaputAuth esté conectado,
-              Renso deberá aprobarla y el nombre quedará vinculado a este dispositivo.
+              Este nombre se enviará a aprobación. Nadie podrá usarlo como tu identidad Paput
+              hasta que Renso apruebe la cuenta y este dispositivo.
             </p>
           </div>
 

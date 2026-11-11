@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import homeBgUrl from '../../assets/home-bg.mp4'
 import { SparkleLogo } from '../../components/SparkleLogo'
 
 interface OnboardingShellProps {
@@ -19,17 +18,11 @@ export function OnboardingShell({
   children,
 }: OnboardingShellProps) {
   return (
-    <div className="relative h-full w-full overflow-y-auto bg-tenso-bg">
-      <video
-        src={homeBgUrl}
-        className="pointer-events-none fixed inset-0 h-full w-full scale-[1.02] object-cover opacity-55"
-        autoPlay
-        loop
-        muted
-        playsInline
-      />
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(90deg,rgba(12,14,15,0.97)_0%,rgba(15,17,19,0.88)_52%,rgba(15,17,19,0.72)_100%)]" />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-t from-[#0f1113] via-transparent to-[#0f1113]/65" />
+    <div className="paput-backdrop relative h-full w-full overflow-y-auto bg-tenso-bg">
+      <div className="paput-backdrop-glow pointer-events-none fixed inset-0" />
+      <div className="paput-backdrop-blocks pointer-events-none fixed inset-0" />
+      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(90deg,rgba(12,14,15,0.97)_0%,rgba(15,17,19,0.84)_52%,rgba(15,17,19,0.52)_100%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-t from-[#0f1113] via-transparent to-[#0f1113]/55" />
 
       <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[1180px] flex-col px-8 py-7">
         <header className="flex items-center justify-between">

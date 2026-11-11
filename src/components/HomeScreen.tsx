@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Account, Instance } from '../../shared/ipc'
 import type { PlayerGroup } from '../features/player/types'
 import { SparkleLogo } from './SparkleLogo'
-import homeBgUrl from '../assets/home-bg.mp4'
 
 interface HomeScreenProps {
   groups: PlayerGroup[]
@@ -16,18 +15,11 @@ interface HomeScreenProps {
  */
 export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) {
   return (
-    <main className="media-surface relative grid flex-1 place-items-center overflow-y-auto p-8">
-      {/* Fondo animado de Inicio (vídeo en bucle, sin audio) con velo para legibilidad */}
-      <video
-        src={homeBgUrl}
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
-      />
-      <div className="pointer-events-none absolute inset-0 bg-tenso-bg/45" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-bg/90 via-tenso-bg/20 to-tenso-bg/50" />
+    <main className="paput-backdrop media-surface relative grid flex-1 place-items-center overflow-y-auto p-8">
+      {/* Fondo propio y estático: evita decodificar vídeo mientras el launcher está abierto. */}
+      <div className="paput-backdrop-glow pointer-events-none absolute inset-0" />
+      <div className="paput-backdrop-blocks pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-tenso-bg/95 via-tenso-bg/25 to-tenso-bg/45" />
 
       <div className="anim-fade-in relative z-10 w-full max-w-3xl">
         {/* Hero */}
@@ -108,17 +100,6 @@ export function HomeScreen({ groups, account, onSelectGroup }: HomeScreenProps) 
 
         <p className="mt-8 text-center text-xs text-white/70 [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">
           ¿Alguna duda o error? Repórtalo a Renso por mensaje directo.
-        </p>
-        <p className="mt-1 text-center text-[11px] text-white/50 [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]">
-          Arte del fondo:{' '}
-          <button
-            onClick={() =>
-              window.tenso.openExternal('https://steamcommunity.com/sharedfiles/filedetails/?id=2078716698')
-            }
-            className="font-semibold text-tenso-accent-soft underline-offset-2 hover:underline"
-          >
-            rilw — Minecraft Scene (Steam Workshop)
-          </button>
         </p>
       </div>
     </main>
