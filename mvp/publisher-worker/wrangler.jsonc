@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tenso-publisher",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-11",
+  "r2_buckets": [
+    {
+      "binding": "PACK_CONTENT",
+      "bucket_name": "tenso-content"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import "./credit.css";
 
 type AccountMode = "microsoft" | "offline";
 type Stage = "account" | "launcher" | "installing" | "complete";
@@ -68,5 +69,6 @@ export default function App() {
 
       {stage === "complete" && <section className="complete-screen screen-enter"><div className="success-mark">✓</div><p className="eyebrow">04 — DEMOSTRACIÓN COMPLETADA</p><h1>Listo para<br />la aventura.</h1><p className="intro">En la versión real, Midnight Valley quedará preparado en {active?.name}. Ningún archivo fue cambiado en esta prueba.</p><div className="details"><div><small>SERVIDOR</small><strong>play.midnightvalley.gg</strong></div><div><small>LAUNCHER</small><strong>{active?.name}</strong></div><div><small>REQUISITO</small><strong>Java 21</strong></div></div><button className="primary" onClick={restart}>Probar otro flujo <span>↻</span></button></section>}
     </main>
+    <footer className="project-credit"><span>Una creación de Renso</span><span aria-hidden="true">·</span><strong>con el impulso de Lilith&apos;s Dream World</strong></footer>
   </div>;
 }
