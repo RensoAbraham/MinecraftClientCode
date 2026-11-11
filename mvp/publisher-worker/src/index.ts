@@ -14,6 +14,10 @@ type Manifest = {
 type PublisherEnv = Env & { PUBLISHER_TOKEN: string };
 const safeSegment = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 const safePath = /^[a-z0-9][a-z0-9._/-]{0,299}$/i;
+// Keep Tenso's own overrides well below R2's included 10 GB-month allowance.
+// This is deliberately lower than Cloudflare's free upload-body limit, too.
+const MAX_FILE_BYTES = 90 * 1024 * 1024;
+const MAX_TOTAL_STORAGE_BYTES = 5 * 1024 * 1024 * 1024;
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
@@ -34,6 +38,21 @@ function objectKey(id: string, version: string, path: string): string | null {
   return `packs/${id}/${version}/${path}`;
 }
 
+async function storedBytes(env: PublisherEnv): Promise<number> {
+  let total = 0;
+  let cursor: string | undefined;
+
+  do {
+    const page = cursor
+      ? await env.PACK_CONTENT.list({ prefix: "packs/", cursor })
+      : await env.PACK_CONTENT.list({ prefix: "packs/" });
+    total += page.objects.reduce((sum, object) => sum + object.size, 0);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  return total;
+}
+
 function validManifest(value: unknown, id: string, version: string): value is Manifest {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const manifest = value as Partial<Manifest>;
@@ -48,10 +67,18 @@ function validManifest(value: unknown, id: string, version: string): value is Ma
 async function publishFile(request: Request, env: PublisherEnv, id: string, version: string, filePath: string): Promise<Response> {
   const key = objectKey(id, version, `overlay/${filePath}`);
   if (!key || !request.body) return json({ error: "Ruta o contenido inválido" }, 400);
-  const length = Number(request.headers.get("content-length") ?? 0);
-  if (!Number.isFinite(length) || length > 100 * 1024 * 1024) return json({ error: "Archivo demasiado grande" }, 413);
+  const contentLength = request.headers.get("content-length");
+  const length = Number(contentLength);
+  if (!contentLength || !Number.isInteger(length) || length < 0 || length > MAX_FILE_BYTES) {
+    return json({ error: "Archivo demasiado grande o sin tamaño declarado" }, 413);
+  }
   const sha256 = request.headers.get("x-tenso-sha256");
   if (!sha256 || !/^[a-f0-9]{64}$/i.test(sha256)) return json({ error: "Falta el hash SHA-256" }, 422);
+  const [used, previous] = await Promise.all([storedBytes(env), env.PACK_CONTENT.head(key)]);
+  const projected = used - (previous?.size ?? 0) + length;
+  if (projected > MAX_TOTAL_STORAGE_BYTES) {
+    return json({ error: "Cuota gratuita interna de Tenso alcanzada; elimina versiones antiguas antes de publicar" }, 413);
+  }
   await env.PACK_CONTENT.put(key, request.body, { httpMetadata: { contentType: request.headers.get("content-type") ?? "application/octet-stream" }, customMetadata: { sha256 } });
   console.log(JSON.stringify({ message: "overlay uploaded", id, version, key }));
   return json({ uploaded: true }, 201);
