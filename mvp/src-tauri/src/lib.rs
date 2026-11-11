@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::{env, path::PathBuf, process::Command};
+use sysinfo::{Disks, System};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +19,17 @@ struct LauncherDefinition {
     executable_names: &'static [&'static str],
     candidate_dirs: Vec<PathBuf>,
     install_mode: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemDiagnostic {
+    operating_system: String,
+    cpu: String,
+    cpu_cores: usize,
+    total_memory_mb: u64,
+    available_memory_mb: u64,
+    disk_free_gb: u64,
 }
 
 fn app_data(name: &str) -> Option<PathBuf> {
@@ -95,11 +107,30 @@ fn detect_launchers() -> Vec<Launcher> {
     }).collect()
 }
 
+/// Diagnóstico exclusivamente local para informar requisitos y optimización.
+/// No contiene nombre de usuario, seriales, IP ni identificadores del equipo.
+#[tauri::command]
+fn get_system_diagnostic() -> SystemDiagnostic {
+    let system = System::new_all().ok();
+    let cpu = system.as_ref().and_then(|value| value.cpus().first()).map(|item| item.brand().to_string()).unwrap_or_else(|| "CPU no identificada".into());
+    let disks = Disks::new_with_refreshed_list().ok();
+    let disk_free_gb = disks.as_ref().map(|value| value.iter().map(|disk| disk.available_space()).sum::<u64>() / 1024 / 1024 / 1024).unwrap_or(0);
+    let operating_system = [System::name(), System::os_version()].into_iter().flatten().collect::<Vec<_>>().join(" ");
+    SystemDiagnostic {
+        operating_system,
+        cpu,
+        cpu_cores: system.as_ref().map(|value| value.cpus().len()).unwrap_or(0),
+        total_memory_mb: system.as_ref().map(|value| value.total_memory() / 1024 / 1024).unwrap_or(0),
+        available_memory_mb: system.as_ref().map(|value| value.available_memory() / 1024 / 1024).unwrap_or(0),
+        disk_free_gb,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![detect_launchers])
+        .invoke_handler(tauri::generate_handler![detect_launchers, get_system_diagnostic])
         .run(tauri::generate_context!())
         .expect("error while running Tenso Installer");
 }
